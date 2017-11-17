@@ -31,6 +31,29 @@ describe('Query', () => {
       }),
     )
 
-    expect(data).toEqual({ post: { ...post, __typename: 'Post'} })
+    expect(data).toMatchObject({ post: { ...post, __typename: "Post" } });
   })
+
+  it("can filter a query result", async () => {
+    expect.assertions(1);
+
+    const link = new RestAPILink({ uri: "/api" });
+    
+    const post = { id: "1", title: "Love apollo", content: "Best graphql client ever." };
+    fetchMock.get("/api/post/1", post);
+
+    const postTitleQuery = gql`query postTitle {
+        post @restAPI(type: "Post", route: "/post/1") {
+          id
+          title
+        }
+      }`;
+
+    const data = await makePromise(execute(link, {
+      operationName: "postTitle",
+      query: postTitleQuery
+    }));
+
+    expect(data.post.content).toBeUndefined()
+  });
 })
