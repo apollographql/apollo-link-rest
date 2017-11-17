@@ -9,6 +9,7 @@ class RestAPILink extends ApolloLink {
   request(operation) {
     return new Observable(observer => {
       const queryDefinition = operation.query.definitions[0]
+      const { variables } = operation;
       const { selectionSet } = queryDefinition
 
       const restAPIDirectives = selectionSet.selections[0].directives[0];
@@ -17,15 +18,26 @@ class RestAPILink extends ApolloLink {
       const route = restAPIDirectives.arguments[1].value.value;
       const __typename = restAPIDirectives.arguments[0].value.value;
 
-      fetch(`${this.uri}${route}`)
+      const paramsWithValue = selectionSet.selections[0].arguments.map((p) => ({
+        name: p.name.value,
+        value: p.value.value,
+      }));
+
+      const routeWithParams = paramsWithValue.reduce(( acc, { name, value }) => value ? acc.replace(`:${name}`, value): acc, route);
+      const routeWithParams2 = Object.keys(variables).reduce((acc, e) => acc.replace(`:${e}`, variables[e]), routeWithParams);
+
+      fetch(`${this.uri}${routeWithParams2}`)
         .then(data => data.json())
         .then(data => {
-          const dataFiltered = resKeys.reduce((acc, e) => { acc[e] = data[e]; return acc}, {});
+          const dataFiltered = resKeys.reduce((acc, e) => {
+            acc[e] = data[e];
+            return acc;
+          }, {});
           const withTypeName = { ...dataFiltered, __typename };
           observer.next({ [selectionName]: withTypeName });
-          observer.complete()
+          observer.complete();
         })
-        .catch(observer.error.bind(observer))
+        .catch(observer.error.bind(observer));
     })
   }
 }
