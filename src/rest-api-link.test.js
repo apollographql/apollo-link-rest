@@ -11,9 +11,9 @@ describe('Query', () => {
   it('can get a post', async () => {
     expect.assertions(1)
 
+    const link = new RestAPILink({ uri: "/api" });
     const post = { id: '1', title: 'Love apollo' };
-
-    fetchMock.get('/post/1', post);
+    fetchMock.get('/api/post/1', post);
 
     const postTitleQuery = gql`
       query postTitle {
@@ -23,8 +23,6 @@ describe('Query', () => {
         }
       }
     `
-
-    const link = new RestAPILink({ uri: '' });
 
     const data = await makePromise(
       execute(link, {
