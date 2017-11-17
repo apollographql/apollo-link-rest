@@ -11,17 +11,16 @@ class RestAPILink extends ApolloLink {
       const queryDefinition = operation.query.definitions[0]
       const { selectionSet } = queryDefinition
 
-      // rest API directives
       const restAPIDirectives = selectionSet.selections[0].directives[0];
+      const selectionName = selectionSet.selections[0].name.value;
       const route = restAPIDirectives.arguments[1].value.value;
       const __typename = restAPIDirectives.arguments[0].value.value;
 
       fetch(`${this.uri}${route}`)
         .then(data => data.json())
         .then(data => {
-          //calls the next callback for the subscription
           const withTypeName = { ...data, __typename };
-          observer.next(withTypeName);
+          observer.next({ [selectionName]: withTypeName });
           observer.complete()
         })
         .catch(observer.error.bind(observer))

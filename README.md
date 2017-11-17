@@ -11,6 +11,16 @@ query postTitle {
 }
 ```
 
+will make a call to your server and produce 
+
+```
+post {
+  __typename: "Post",
+  "id"
+  "title"
+}
+```
+
 ## Tests
 
 ```shell
