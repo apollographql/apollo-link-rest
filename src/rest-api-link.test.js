@@ -33,6 +33,6 @@ describe('Query', () => {
       }),
     )
 
-    expect(data).toEqual(post)
+    expect(data).toEqual({ ...post, __typename: 'Post'})
   })
 })
