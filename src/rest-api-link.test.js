@@ -3,7 +3,7 @@ import gql from 'graphql-tag'
 import fetchMock from 'fetch-mock'
 import RestAPILink from './rest-api-link'
 
-describe('Query', () => {
+describe('Query single calls', () => {
   afterEach(() => {
     fetchMock.restore()
   })
@@ -33,6 +33,29 @@ describe('Query', () => {
 
     expect(data).toMatchObject({ post: { ...post, __typename: "Post" } });
   })
+
+  it("can return array result with typename", async () => {
+    expect.assertions(1);
+
+    const link = new RestAPILink({ uri: "/api" });
+
+    const tags = [{ name: "apollo" }, { name: "grapql" }];
+    fetchMock.get("/api/tags", tags);
+
+    const tagsQuery = gql`query tags {
+        tags @restAPI(type: "Tag", route: "/tags") {
+          name
+        }
+      }`;
+
+    const data = await makePromise(execute(link, {
+      operationName: "tags",
+      query: tagsQuery
+    }));
+
+    const tagsWithTypeName = tags.map(tag => ({ ...tag, __typename: 'Tag'}));
+    expect(data).toMatchObject({ tags: tagsWithTypeName });
+  });
 
   it("can filter the query result", async () => {
     expect.assertions(1);
@@ -104,3 +127,45 @@ describe('Query', () => {
     expect(data.post.title).toBe(post.title);
   });
 })
+
+
+describe("Query multiple calls", () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+
+  it("can run a query with multiple rest calls", async () => {
+    expect.assertions(2);
+
+    const link = new RestAPILink({ uri: "/api" });
+
+    const post = { id: "1", title: "Love apollo" };
+    fetchMock.get("/api/post/1", post);
+
+    const tags = [{ name: 'apollo' }, { name: 'grapql' }];
+    fetchMock.get("/api/tags", tags);
+    
+
+    const postAndTags = gql`
+      query postAndTags {
+        post @restAPI(type: "Post", route: "/post/1") {
+          id
+          title
+        }
+        tags @restAPI(type: "Tag", route: "/tags") {
+          name
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: "postAndTags",
+        query: postAndTags,
+      })
+    );
+
+    expect(data.post).toBeDefined();
+    expect(data.tags).toBeDefined();
+  });
+});
