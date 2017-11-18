@@ -6,7 +6,7 @@ const getRequests = (selections, variables, uri) =>
     const restAPIDirectives = selection.directives[0];
     const selectionName = selection.name.value;
     const resKeys = selection.selectionSet.selections.map(({ name }) => name.value);
-    const route = restAPIDirectives.arguments[1].value.value;
+    const endPoint = restAPIDirectives.arguments[1].value.value;
     const __typename = restAPIDirectives.arguments[0].value.value;
 
     const paramsWithValue = selection.arguments.map(p => ({
@@ -14,19 +14,19 @@ const getRequests = (selections, variables, uri) =>
       value: p.value.value
     }));
 
-    const routeWithParams = paramsWithValue.reduce(
+    const endPointWithParams = paramsWithValue.reduce(
       (acc, { name, value }) => (value ? acc.replace(`:${name}`, value) : acc),
-      route
+      endPoint
     );
-    const routeWithParams2 = Object.keys(variables).reduce(
+    const endPointWithParams2 = Object.keys(variables).reduce(
       (acc, e) => acc.replace(`:${e}`, variables[e]),
-      routeWithParams
+      endPointWithParams
     );
 
     return {
       name: selectionName,
       filteredKeys: resKeys,
-      route: `${uri}${routeWithParams2}`,
+      endPoint: `${uri}${endPointWithParams2}`,
       __typename
     };
   });
@@ -52,14 +52,15 @@ const filterResultWithKeys = (result, keys) => {
   return filterObjWithKeys(result, keys);
 }
 
-const processRequest = ({ name, filteredKeys, route, __typename}) => 
+const processRequest = ({ name, filteredKeys, endPoint, __typename}) => 
   new Promise((resolve, reject) => {
-    fetch(route)
+    fetch(endPoint)
     .then(res => res.json())
     .then(data => {
       const dataFiltered = filterResultWithKeys(data, filteredKeys);
       resolve({ [name]: addTypeNameToResult(dataFiltered, __typename) })
     })
+    .catch(reject)
   })
 
 async function processRequests(requestsParams) {
@@ -71,7 +72,6 @@ async function processRequests(requestsParams) {
     throw new Error(error)
   }
 }
-
 
 class RestAPILink extends ApolloLink {
   constructor({ uri }) {

@@ -4,7 +4,7 @@
 
 ```graphql
 query postTitle {
-  post @restAPI(type: "Post", route: "/post/1") {
+  post @restAPI(type: "Post", endPoint: "/post/1") {
     id
     title
   }
