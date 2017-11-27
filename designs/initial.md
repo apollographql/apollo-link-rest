@@ -3,7 +3,7 @@
 ### Arguments
 
 - route: path to rest endpoint. This could be a path or a full url. If a path, add to the endpoint given on link creation or from the context
-- provides: a map of variables to url params
+- params: a map of variables to url params
 - method: the HTTP method to send the request via (i.e GET, PUT, POST)
 - type: The GraphQL type this will return
 
@@ -23,11 +23,11 @@ These are the same semantics that will be supported on the server, but when used
 ```js
 const QUERY = gql`
   query RestData($email: String!) {
-    users @rest(route: '/users/email/:email', provides: { email: $email }, method: 'GET', type: 'User') {
+    users @rest(route: '/users/email/:email', params: { email: $email }, method: 'GET', type: 'User') {
       id @export(as: "id")
       firstName
       lastName
-      friends @rest(route: '/friends/:id', provides: { id: $id }, type: '[User]') {
+      friends @rest(route: '/friends/:id', params: { id: $id }, type: '[User]') {
         firstName
         lastName
       }
@@ -41,7 +41,7 @@ const QUERY = gql`
 
 ### Arguments
 
-- fetch: an implementation of `fetch` (see the http-link for api / warnings)
+- fetch: an optional implementation of `fetch` (see the http-link for api / warnings). Will use global if found
 - fieldNameNormalizer: a function that takes the response field name and turns into a GraphQL compliant name,for instance "MyFieldName:IsGreat" => myFieldNameIsGreat
 - endpoint: a root endpoint to apply routes to: i.e. api.example.com/v1
 - batch: a boolean to batch possible calls together (not inital version requirement!)
