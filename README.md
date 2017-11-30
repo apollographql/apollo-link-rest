@@ -11,7 +11,7 @@ The goal is to allow this kind of queries :
 
 ```graphql
 query me {
-  post @restAPI(type: "Post", endPoint: "/post/1") {
+  post @rest(type: "Post", endPoint: "/post/1") {
     id
     title
   }
@@ -26,14 +26,14 @@ So that you can first use your REST API and adopt incrementally GraphQL on your 
 
 Of course you do not get all the benefits of graphQL by using this package :
 
-* Multiples requests are send when multiple `@restAPI` directives are found.
+* Multiples requests are send when multiple `@rest` directives are found.
 * You get all the fields from your REST endpoints : filtering is done client side.
 
 ## Example Queries
 
 ```graphql
 query postTitle {
-  post @restAPI(type: "Post", endPoint: "/post/1") {
+  post @rest(type: "Post", endPoint: "/post/1") {
     id
     title
   }
@@ -54,7 +54,7 @@ You can pass a variable to a query
 
 ```graphql
 query postTitle($id: ID!) {
-  post(id: $id) @restAPI(type: "Post", endPoint: "/post/:id") {
+  post(id: $id) @rest(type: "Post", endPoint: "/post/:id") {
     id
     title
   }
@@ -66,11 +66,11 @@ You can make multiple calls in a query
 
 ```graphql
 query postAndTags {
-  post @restAPI(type: "Post", endPoint: "/post/1") {
+  post @rest(type: "Post", endPoint: "/post/1") {
     id
     title
   }
-  tags @restAPI(type: "Tag", endPoint: "/tags") {
+  tags @rest(type: "Tag", endPoint: "/tags") {
     name
   }
 }
@@ -86,7 +86,7 @@ import RestLink from 'rest-api-link';
 const APILink = new RestLink({ uri: 'example.com/api' });
 
 const tagsQuery = gql`query tags {
-  tags @restAPI(type: "Tag", endPoint: "/tags") {
+  tags @rest(type: "Tag", endPoint: "/tags") {
     name
   }
 }`;

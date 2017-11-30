@@ -3,7 +3,7 @@ import { hasDirectives, getQueryDefinition } from "apollo-utilities";
 import { filterObjectWithKeys, ArrayToObject } from './utils';
 
 const getRestDirective = selection => selection.directives.filter(directive => 
-      (directive.kind === 'Directive' && directive.name.value === 'restAPI'))[0]
+      (directive.kind === 'Directive' && directive.name.value === 'rest'))[0]
 
 const getTypeNameFromDirective = directive => {
   const typeArgument = directive.arguments.filter(argument => argument.name.value === 'type' )[0];
@@ -98,7 +98,7 @@ class RestLink extends ApolloLink {
 
   request(operation) {
     const { query } = operation;
-    const isRestQuery = hasDirectives(["restAPI"], operation.query);
+    const isRestQuery = hasDirectives(["rest"], operation.query);
     if (!isRestQuery) {
       // should we forward the request ?
     }

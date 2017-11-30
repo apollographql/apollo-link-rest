@@ -17,7 +17,7 @@ describe('Query single calls', () => {
 
     const postTitleQuery = gql`
       query postTitle {
-        post @restAPI(type: "Post", endPoint: "/post/1") {
+        post @rest(type: "Post", endPoint: "/post/1") {
           id
           title
         }
@@ -42,7 +42,7 @@ describe('Query single calls', () => {
       fetchMock.get("/api/post/1", post);
 
       const postTitleQuery = gql`query postTitle {
-          post @restAPI(endPoint: "/post/1", type: "Post") {
+          post @rest(endPoint: "/post/1", type: "Post") {
             id
             title
           }
@@ -65,7 +65,7 @@ describe('Query single calls', () => {
     fetchMock.get("/api/tags", tags);
 
     const tagsQuery = gql`query tags {
-        tags @restAPI(type: "[Tag]", endPoint: "/tags") {
+        tags @rest(type: "[Tag]", endPoint: "/tags") {
           name
         }
       }`;
@@ -88,7 +88,7 @@ describe('Query single calls', () => {
     fetchMock.get("/api/post/1", post);
 
     const postTitleQuery = gql`query postTitle {
-        post @restAPI(type: "Post", endPoint: "/post/1") {
+        post @rest(type: "Post", endPoint: "/post/1") {
           id
           title
         }
@@ -111,7 +111,7 @@ describe('Query single calls', () => {
     fetchMock.get("/api/post/1", post);
 
     const postTitleQuery = gql`query postTitle {
-        post(id: "1") @restAPI(type: "Post", endPoint: "/post/:id") {
+        post(id: "1") @rest(type: "Post", endPoint: "/post/:id") {
           id
           title
         }
@@ -134,7 +134,7 @@ describe('Query single calls', () => {
     fetchMock.get("/api/post/1", post);
 
     const postTitleQuery = gql`query postTitle($id: ID!) {
-        post(id: $id) @restAPI(type: "Post", endPoint: "/post/:id") {
+        post(id: $id) @rest(type: "Post", endPoint: "/post/:id") {
           id
           title
         }
@@ -170,11 +170,11 @@ describe("Query multiple calls", () => {
 
     const postAndTags = gql`
       query postAndTags {
-        post @restAPI(type: "Post", endPoint: "/post/1") {
+        post @rest(type: "Post", endPoint: "/post/1") {
           id
           title
         }
-        tags @restAPI(type: "[Tag]", endPoint: "/tags") {
+        tags @rest(type: "[Tag]", endPoint: "/tags") {
           name
         }
       }
