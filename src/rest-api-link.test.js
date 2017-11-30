@@ -43,7 +43,7 @@ describe('Query single calls', () => {
     fetchMock.get("/api/tags", tags);
 
     const tagsQuery = gql`query tags {
-        tags @restAPI(type: "Tag", endPoint: "/tags") {
+        tags @restAPI(type: "[Tag]", endPoint: "/tags") {
           name
         }
       }`;
@@ -53,7 +53,7 @@ describe('Query single calls', () => {
       query: tagsQuery
     }));
 
-    const tagsWithTypeName = tags.map(tag => ({ ...tag, __typename: 'Tag'}));
+    const tagsWithTypeName = tags.map(tag => ({ ...tag, __typename: '[Tag]'}));
     expect(data).toMatchObject({ tags: tagsWithTypeName });
   });
 
@@ -152,7 +152,7 @@ describe("Query multiple calls", () => {
           id
           title
         }
-        tags @restAPI(type: "Tag", endPoint: "/tags") {
+        tags @restAPI(type: "[Tag]", endPoint: "/tags") {
           name
         }
       }
