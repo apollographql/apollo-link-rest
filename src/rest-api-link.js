@@ -90,7 +90,7 @@ async function processRequests(requestsParams) {
   }
 }
 
-class RestAPILink extends ApolloLink {
+class RestLink extends ApolloLink {
   constructor({ uri }) {
     super();
     this.uri = uri;
@@ -120,4 +120,4 @@ class RestAPILink extends ApolloLink {
   }
 }
 
-export default RestAPILink;
+export default RestLink;

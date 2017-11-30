@@ -81,9 +81,9 @@ Please look into the *.test file to see cases we can handle.
 ## Usage
 
 ```js
-import RestAPILink from 'rest-api-link';
+import RestLink from 'rest-api-link';
 
-const APILink = new RestAPILink({ uri: 'example.com/api' });
+const APILink = new RestLink({ uri: 'example.com/api' });
 
 const tagsQuery = gql`query tags {
   tags @restAPI(type: "Tag", endPoint: "/tags") {
