@@ -1,4 +1,8 @@
 # apollo-link-rest
+
+# Design discussion going on [here](https://github.com/apollographql/apollo-link-rest/pull/1)
+
+
 Use existing REST endpoints with GraphQL
 
 Do not use it in production. There are still many things to do, if you want to contribute feel free to open an issue.
