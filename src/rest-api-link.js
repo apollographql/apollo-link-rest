@@ -10,9 +10,9 @@ const getTypeNameFromDirective = directive => {
   return typeArgument.value.value;
 }
 
-const getEndPointFromDirective = directive => {
-  const endPointArgument = directive.arguments.filter(argument => argument.name.value === 'endPoint')[0];
-  return endPointArgument.value.value;
+const getEndpointFromDirective = directive => {
+  const endpointArgument = directive.arguments.filter(argument => argument.name.value === 'endpoint')[0];
+  return endpointArgument.value.value;
 }
 
 const getSelectionName = selection => selection.name.value;
@@ -24,17 +24,17 @@ const getQueryParams = selection =>
     value: p.value.value
   }));
 
-const replaceParam = (endPoint, name, value) => {
+const replaceParam = (endpoint, name, value) => {
   if(!value || !name) {
-    return endPoint;
+    return endpoint;
   }
-  return endPoint.replace(`:${name}`, value)
+  return endpoint.replace(`:${name}`, value)
 }
 
-const replaceParamsInsideEndPoints = (endPoint, queryParams, variables) => {
-  const endPointWithQueryParams = queryParams.reduce((acc, { name, value }) => replaceParam(acc, name, value), endPoint);
-  const endPointWithInputVariables = Object.keys(variables).reduce((acc, e) => replaceParam(acc, e, variables[e]), endPointWithQueryParams);
-  return endPointWithInputVariables;
+const replaceParamsInsideEndpoints = (endpoint, queryParams, variables) => {
+  const endpointWithQueryParams = queryParams.reduce((acc, { name, value }) => replaceParam(acc, name, value), endpoint);
+  const endpointWithInputVariables = Object.keys(variables).reduce((acc, e) => replaceParam(acc, e, variables[e]), endpointWithQueryParams);
+  return endpointWithInputVariables;
 };
 
 const getRequests = (selections, variables, uri) =>
@@ -42,15 +42,15 @@ const getRequests = (selections, variables, uri) =>
     const selectionName = getSelectionName(selection);
     const filteredKeys = getResultKeys(selection); 
     const directive = getRestDirective(selection);
-    const endPoint = getEndPointFromDirective(directive);
+    const endpoint = getEndpointFromDirective(directive);
     const __typename = getTypeNameFromDirective(directive);
     const queryParams = getQueryParams(selection);
-    const endPointWithParams = replaceParamsInsideEndPoints(endPoint, queryParams, variables);
+    const endpointWithParams = replaceParamsInsideEndpoints(endpoint, queryParams, variables);
 
     return {
       name: selectionName,
       filteredKeys,
-      endPoint: `${uri}${endPointWithParams}`,
+      endpoint: `${uri}${endpointWithParams}`,
       __typename
     };
   });
@@ -69,9 +69,9 @@ const filterResultWithKeys = (result, keys) => {
   return filterObjectWithKeys(result, keys);
 };
 
-const processRequest = ({ name, filteredKeys, endPoint, __typename }) =>
+const processRequest = ({ name, filteredKeys, endpoint, __typename }) =>
   new Promise((resolve, reject) => {
-    fetch(endPoint)
+    fetch(endpoint)
       .then(res => res.json())
       .then(data => {
         const dataFiltered = filterResultWithKeys(data, filteredKeys);

@@ -11,7 +11,7 @@ The goal is to allow this kind of queries :
 
 ```graphql
 query me {
-  post @rest(type: "Post", endPoint: "/post/1") {
+  post @rest(type: "Post", endpoint: "/post/1") {
     id
     title
   }
@@ -33,7 +33,7 @@ Of course you do not get all the benefits of graphQL by using this package :
 
 ```graphql
 query postTitle {
-  post @rest(type: "Post", endPoint: "/post/1") {
+  post @rest(type: "Post", endpoint: "/post/1") {
     id
     title
   }
@@ -54,7 +54,7 @@ You can pass a variable to a query
 
 ```graphql
 query postTitle($id: ID!) {
-  post(id: $id) @rest(type: "Post", endPoint: "/post/:id") {
+  post(id: $id) @rest(type: "Post", endpoint: "/post/:id") {
     id
     title
   }
@@ -66,11 +66,11 @@ You can make multiple calls in a query
 
 ```graphql
 query postAndTags {
-  post @rest(type: "Post", endPoint: "/post/1") {
+  post @rest(type: "Post", endpoint: "/post/1") {
     id
     title
   }
-  tags @rest(type: "Tag", endPoint: "/tags") {
+  tags @rest(type: "Tag", endpoint: "/tags") {
     name
   }
 }
@@ -86,7 +86,7 @@ import RestLink from 'rest-api-link';
 const APILink = new RestLink({ uri: 'example.com/api' });
 
 const tagsQuery = gql`query tags {
-  tags @rest(type: "Tag", endPoint: "/tags") {
+  tags @rest(type: "Tag", endpoint: "/tags") {
     name
   }
 }`;
