@@ -1,10 +1,5 @@
-# Apollo API Rest Link
-
-After looking the talk of [Peggy Rayzis at Graphql Summit](https://www.youtube.com/watch?v=eHjP2WFt0zU&list=PLpi1lPB6opQywks7yYYs5jJAIRI3faRTm&index=18) I wanted to experiment on this subject as this is a need that I have in one of my app.
-
-For now, I am playing with graphQL Abstract Syntax Tree, but my parsing is error prone.
-My plan is soon to use [apollo-utilities](https://github.com/apollographql/apollo-client/tree/master/packages/apollo-utilities)
-as [here](https://github.com/apollographql/apollo-client/blob/master/packages/graphql-anywhere/src/graphql.ts)
+# apollo-link-rest
+Use existing REST endpoints with GraphQL
 
 Do not use it in production. There are still many things to do, if you want to contribute feel free to open an issue.
 
@@ -104,3 +99,5 @@ const data = await makePromise(execute(APILink, {
 ```shell
 yarn test
 ```
+
+>>>>>>> master
