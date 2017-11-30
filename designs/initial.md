@@ -6,6 +6,7 @@
 - params: a map of variables to url params
 - method: the HTTP method to send the request via (i.e GET, PUT, POST)
 - type: The GraphQL type this will return
+- endpoint: which endpoint (if using a map of endpoints) to use for the request
 
 ### Notes
 
@@ -41,10 +42,13 @@ const QUERY = gql`
 
 ### Arguments
 
-- fetch: an optional implementation of `fetch` (see the http-link for api / warnings). Will use global if found
-- fieldNameNormalizer: a function that takes the response field name and turns into a GraphQL compliant name,for instance "MyFieldName:IsGreat" => myFieldNameIsGreat
-- endpoint: a root endpoint to apply routes to: i.e. api.example.com/v1
-- batch: a boolean to batch possible calls together (not inital version requirement!)
+- `fetch`: an optional implementation of `fetch` (see the http-link for api / warnings). Will use global if found
+- `fieldNameNormalizer`: a function that takes the response field name and turns into a GraphQL compliant name,for instance "MyFieldName:IsGreat" => myFieldNameIsGreat
+- `endpoint`: a root endpoint to apply routes to: i.e. api.example.com/v1 or a map of endpoints with a key to choose in the directive
+- `batch`: a boolean to batch possible calls together (not inital version requirement!)
+- `headers`: an object representing values to be sent as headers on the request
+- `credentials`: a string representing the credentials policy you want for the fetch call
+- `fetchOptions`: any overrides of the fetch options argument to pass to the fetch call
 
 ### Notes
 
@@ -53,6 +57,7 @@ It would be great to support batching of calls to /users if they are sent at the
 ```js
 const link = createRestLink({
   endpoint: "https://api.example.com/v1",
+  // endpoint: { "version1": "https://api.example.com/v1", "version2": "https://api.example.com/v2" },
   fetch: nodeFetch,
   fieldNameNormalizer: name => camelCase(name),
   // batch: false
