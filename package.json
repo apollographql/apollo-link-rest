@@ -4,7 +4,8 @@
   "main": "rest-api-link.js",
   "license": "MIT",
   "dependencies": {
-    "apollo-link": "^1.0.0"
+    "apollo-link": "^1.0.0",
+    "apollo-utilities": "^1.0.2"
   },
   "scripts": {
     "test": "jest"

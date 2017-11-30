@@ -34,6 +34,28 @@ describe('Query single calls', () => {
     expect(data).toMatchObject({ post: { ...post, __typename: "Post" } });
   })
 
+    it("can get query params regardless of the order", async () => {
+      expect.assertions(1);
+
+      const link = new RestAPILink({ uri: "/api" });
+      const post = { id: "1", title: "Love apollo" };
+      fetchMock.get("/api/post/1", post);
+
+      const postTitleQuery = gql`query postTitle {
+          post @restAPI(endPoint: "/post/1", type: "Post") {
+            id
+            title
+          }
+        }`;
+
+      const data = await makePromise(execute(link, {
+          operationName: "postTitle",
+          query: postTitleQuery
+        }));
+
+      expect(data).toMatchObject({ post: { ...post, __typename: "Post" } });
+    });
+
   it("can return array result with typename", async () => {
     expect.assertions(1);
 

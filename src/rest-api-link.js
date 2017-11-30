@@ -1,9 +1,19 @@
 import { ApolloLink, Observable } from "apollo-link";
+import { hasDirectives, getQueryDefinition } from "apollo-utilities";
 import { filterObjectWithKeys, ArrayToObject } from './utils';
 
-// assuming arguments are always typename and endPoint in this order
-const getTypeName = selection => selection.directives[0].arguments[0].value.value;
-const getEndPoint = selection => selection.directives[0].arguments[1].value.value;
+const getRestDirective = selection => selection.directives.filter(directive => 
+      (directive.kind === 'Directive' && directive.name.value === 'restAPI'))[0]
+
+const getTypeNameFromDirective = directive => {
+  const typeArgument = directive.arguments.filter(argument => argument.name.value === 'type' )[0];
+  return typeArgument.value.value;
+}
+
+const getEndPointFromDirective = directive => {
+  const endPointArgument = directive.arguments.filter(argument => argument.name.value === 'endPoint')[0];
+  return endPointArgument.value.value;
+}
 
 const getSelectionName = selection => selection.name.value;
 const getResultKeys = selection => selection.selectionSet.selections.map(({ name }) => name.value);
@@ -21,7 +31,7 @@ const replaceParam = (endPoint, name, value) => {
   return endPoint.replace(`:${name}`, value)
 }
 
-const replaceParamsInsideEndPoints = (queryParams, endPoint, variables) => {
+const replaceParamsInsideEndPoints = (endPoint, queryParams, variables) => {
   const endPointWithQueryParams = queryParams.reduce((acc, { name, value }) => replaceParam(acc, name, value), endPoint);
   const endPointWithInputVariables = Object.keys(variables).reduce((acc, e) => replaceParam(acc, e, variables[e]), endPointWithQueryParams);
   return endPointWithInputVariables;
@@ -30,15 +40,16 @@ const replaceParamsInsideEndPoints = (queryParams, endPoint, variables) => {
 const getRequests = (selections, variables, uri) =>
   selections.map(selection => {
     const selectionName = getSelectionName(selection);
-    const resKeys = getResultKeys(selection); 
-    const endPoint = getEndPoint(selection);
-    const __typename = getTypeName(selection);
+    const filteredKeys = getResultKeys(selection); 
+    const directive = getRestDirective(selection);
+    const endPoint = getEndPointFromDirective(directive);
+    const __typename = getTypeNameFromDirective(directive);
     const queryParams = getQueryParams(selection);
-    const endPointWithParams = replaceParamsInsideEndPoints(queryParams, endPoint, variables);
+    const endPointWithParams = replaceParamsInsideEndPoints(endPoint, queryParams, variables);
 
     return {
       name: selectionName,
-      filteredKeys: resKeys,
+      filteredKeys,
       endPoint: `${uri}${endPointWithParams}`,
       __typename
     };
@@ -86,12 +97,16 @@ class RestAPILink extends ApolloLink {
   }
 
   request(operation) {
+    const { query } = operation;
+    const isRestQuery = hasDirectives(["restAPI"], operation.query);
+    if (!isRestQuery) {
+      // should we forward the request ?
+    }
     return new Observable(observer => {
       // for now doing query only
-      const queryDefinition = operation.query.definitions[0];
+      const queryDefinition = getQueryDefinition(query);
       const { variables } = operation;
       const { selectionSet: { selections } } = queryDefinition;
-
       const requestsParams = getRequests(selections, variables, this.uri);
 
       try {
