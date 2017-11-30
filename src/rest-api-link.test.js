@@ -1,7 +1,7 @@
 import { execute, makePromise } from 'apollo-link'
 import gql from 'graphql-tag'
 import fetchMock from 'fetch-mock'
-import RestAPILink from './rest-api-link'
+import RestLink from './rest-api-link'
 
 describe('Query single calls', () => {
   afterEach(() => {
@@ -11,13 +11,13 @@ describe('Query single calls', () => {
   it('can run a simple query', async () => {
     expect.assertions(1)
 
-    const link = new RestAPILink({ uri: "/api" });
+    const link = new RestLink({ uri: "/api" });
     const post = { id: '1', title: 'Love apollo' };
     fetchMock.get('/api/post/1', post);
 
     const postTitleQuery = gql`
       query postTitle {
-        post @restAPI(type: "Post", endPoint: "/post/1") {
+        post @rest(type: "Post", endpoint: "/post/1") {
           id
           title
         }
@@ -37,12 +37,12 @@ describe('Query single calls', () => {
     it("can get query params regardless of the order", async () => {
       expect.assertions(1);
 
-      const link = new RestAPILink({ uri: "/api" });
+      const link = new RestLink({ uri: "/api" });
       const post = { id: "1", title: "Love apollo" };
       fetchMock.get("/api/post/1", post);
 
       const postTitleQuery = gql`query postTitle {
-          post @restAPI(endPoint: "/post/1", type: "Post") {
+          post @rest(endpoint: "/post/1", type: "Post") {
             id
             title
           }
@@ -59,13 +59,13 @@ describe('Query single calls', () => {
   it("can return array result with typename", async () => {
     expect.assertions(1);
 
-    const link = new RestAPILink({ uri: "/api" });
+    const link = new RestLink({ uri: "/api" });
 
     const tags = [{ name: "apollo" }, { name: "grapql" }];
     fetchMock.get("/api/tags", tags);
 
     const tagsQuery = gql`query tags {
-        tags @restAPI(type: "[Tag]", endPoint: "/tags") {
+        tags @rest(type: "[Tag]", endpoint: "/tags") {
           name
         }
       }`;
@@ -82,13 +82,13 @@ describe('Query single calls', () => {
   it("can filter the query result", async () => {
     expect.assertions(1);
 
-    const link = new RestAPILink({ uri: "/api" });
+    const link = new RestLink({ uri: "/api" });
 
     const post = { id: "1", title: "Love apollo", content: "Best graphql client ever." };
     fetchMock.get("/api/post/1", post);
 
     const postTitleQuery = gql`query postTitle {
-        post @restAPI(type: "Post", endPoint: "/post/1") {
+        post @rest(type: "Post", endpoint: "/post/1") {
           id
           title
         }
@@ -105,13 +105,13 @@ describe('Query single calls', () => {
   it("can pass param to a query without a variable", async () => {
     expect.assertions(1);
 
-    const link = new RestAPILink({ uri: "/api" });
+    const link = new RestLink({ uri: "/api" });
 
     const post = { id: "1", title: "Love apollo" };
     fetchMock.get("/api/post/1", post);
 
     const postTitleQuery = gql`query postTitle {
-        post(id: "1") @restAPI(type: "Post", endPoint: "/post/:id") {
+        post(id: "1") @rest(type: "Post", endpoint: "/post/:id") {
           id
           title
         }
@@ -128,13 +128,13 @@ describe('Query single calls', () => {
   it("can pass param to a query with a variable", async () => {
     expect.assertions(1);
 
-    const link = new RestAPILink({ uri: "/api" });
+    const link = new RestLink({ uri: "/api" });
 
     const post = { id: "1", title: "Love apollo" };
     fetchMock.get("/api/post/1", post);
 
     const postTitleQuery = gql`query postTitle($id: ID!) {
-        post(id: $id) @restAPI(type: "Post", endPoint: "/post/:id") {
+        post(id: $id) @rest(type: "Post", endpoint: "/post/:id") {
           id
           title
         }
@@ -159,7 +159,7 @@ describe("Query multiple calls", () => {
   it("can run a query with multiple rest calls", async () => {
     expect.assertions(2);
 
-    const link = new RestAPILink({ uri: "/api" });
+    const link = new RestLink({ uri: "/api" });
 
     const post = { id: "1", title: "Love apollo" };
     fetchMock.get("/api/post/1", post);
@@ -170,11 +170,11 @@ describe("Query multiple calls", () => {
 
     const postAndTags = gql`
       query postAndTags {
-        post @restAPI(type: "Post", endPoint: "/post/1") {
+        post @rest(type: "Post", endpoint: "/post/1") {
           id
           title
         }
-        tags @restAPI(type: "[Tag]", endPoint: "/tags") {
+        tags @rest(type: "[Tag]", endpoint: "/tags") {
           name
         }
       }
