@@ -3,7 +3,7 @@ export default {
   dest: 'lib/bundle.umd.js',
   format: 'umd',
   sourceMap: true,
-  moduleName: 'persistedQueryLink',
+  moduleName: 'restLink',
   exports: 'named',
   onwarn,
 };
