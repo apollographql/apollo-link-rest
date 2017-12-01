@@ -15,11 +15,26 @@ const getTypeNameFromDirective = directive => {
   return typeArgument.value.value;
 };
 
+const getPathFromDirective = directive => {
+  const pathArgument =
+    directive.arguments.filter(argument => argument.name.value === 'path')[0] ||
+    {};
+  return (pathArgument.value || {}).value;
+};
+
 const getEndpointFromDirective = directive => {
-  const endpointArgument = directive.arguments.filter(
-    argument => argument.name.value === 'endpoint',
-  )[0];
-  return endpointArgument.value.value;
+  const endpointArgument =
+    directive.arguments.filter(
+      argument => argument.name.value === 'endpoint',
+    )[0] || {};
+  return (endpointArgument.value || {}).value;
+};
+
+const getURIFromEndpoints = (endpoints, endpoint) => {
+  return (
+    endpoints[endpoint || DEFAULT_ENDPOINT_KEY] ||
+    endpoints[DEFAULT_ENDPOINT_KEY]
+  );
 };
 
 const getSelectionName = selection => selection.name.value;
@@ -39,10 +54,10 @@ const replaceParam = (endpoint, name, value) => {
   return endpoint.replace(`:${name}`, value);
 };
 
-const replaceParamsInsideEndpoints = (endpoint, queryParams, variables) => {
+const replaceParamsInsidePath = (fullPath, queryParams, variables) => {
   const endpointWithQueryParams = queryParams.reduce(
     (acc, { name, value }) => replaceParam(acc, name, value),
-    endpoint,
+    fullPath,
   );
   const endpointWithInputVariables = Object.keys(variables).reduce(
     (acc, e) => replaceParam(acc, e, variables[e]),
@@ -51,16 +66,21 @@ const replaceParamsInsideEndpoints = (endpoint, queryParams, variables) => {
   return endpointWithInputVariables;
 };
 
-const getRequests = (selections, variables, uri) =>
+const getRequests = (selections, variables, endpoints) =>
   selections.map(selection => {
     const selectionName = getSelectionName(selection);
     const filteredKeys = getResultKeys(selection);
     const directive = getRestDirective(selection);
-    const endpoint = getEndpointFromDirective(directive);
+    const endpoint = getEndpointFromDirective(directive) || '';
+    const path = getPathFromDirective(directive) || '';
     const __typename = getTypeNameFromDirective(directive);
     const queryParams = getQueryParams(selection);
-    const endpointWithParams = replaceParamsInsideEndpoints(
-      endpoint,
+
+    const uri = getURIFromEndpoints(endpoints, endpoint);
+
+    const fullPath = uri + path;
+    const endpointAndPathWithParams = replaceParamsInsidePath(
+      fullPath,
       queryParams,
       variables,
     );
@@ -68,7 +88,7 @@ const getRequests = (selections, variables, uri) =>
     return {
       name: selectionName,
       filteredKeys,
-      endpoint: `${uri}${endpointWithParams}`,
+      endpoint: `${endpointAndPathWithParams}`,
       __typename,
     };
   });
@@ -107,12 +127,42 @@ async function processRequests(requestsParams) {
     throw new Error(error);
   }
 }
+/**
+ * Default key to use when the @rest directive omits the "endpoint" parameter.
+ */
+const DEFAULT_ENDPOINT_KEY = '';
 
+/**
+ * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
+ * - @param: uri: default URI, optional if endpoints provides a default.
+ * - @param: endpoints: optional map of potential API endpoints this RestLink will hit.
+ */
 export class RestLink extends ApolloLink {
-  private uri: string;
-  constructor({ uri }) {
+  private endpoints: { [endpointKey: string]: string };
+  constructor({ uri, endpoints }) {
     super();
-    this.uri = uri;
+    const fallback = {};
+    fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
+    this.endpoints = Object.assign({}, endpoints || fallback);
+
+    if (uri == null && endpoints == null) {
+      throw new Error(
+        'A RestLink must be initialized with either 1 uri, or a map of keyed-endpoints',
+      );
+    }
+    if (uri != null) {
+      const currentDefaultURI = (endpoints || {})[DEFAULT_ENDPOINT_KEY];
+      if (currentDefaultURI != null && currentDefaultURI != uri) {
+        throw new Error(
+          "RestLink was configured with a default uri that doesn't match what's passed in to the endpoints map.",
+        );
+      }
+      this.endpoints[DEFAULT_ENDPOINT_KEY] == uri;
+    }
+
+    // if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
+    //   console.warn("RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!");
+    // }
   }
 
   request(operation) {
@@ -126,7 +176,7 @@ export class RestLink extends ApolloLink {
       const queryDefinition = getQueryDefinition(query);
       const { variables } = operation;
       const { selectionSet: { selections } } = queryDefinition;
-      const requestsParams = getRequests(selections, variables, this.uri);
+      const requestsParams = getRequests(selections, variables, this.endpoints);
 
       try {
         const result = processRequests(requestsParams);
