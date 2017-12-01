@@ -1,107 +1,33 @@
 # apollo-link-rest
 
-# Design discussion going on [here](https://github.com/apollographql/apollo-link-rest/pull/1)
+## Problem to solve
+You have an existing REST set of services that you have worked on for a long time. However the limitations of it are pilling up and you think GraphQL is a great solution to make your application faster and easier to develop. With `apollo-link-rest`, you can start trying out GraphQL without a full server. You can use it to prototype and even use it for third party services that don't yet have a GraphQL endpoint.
 
+Apollo Link Rest lets you query traditional REST API endpoints while writing GraphQL. It is designed to work with Apollo Client, but can even be used on its own with Apollo Link.
 
-Use existing REST endpoints with GraphQL
+## Status
+This library is under active development. For information on progress check out [this issue](https://github.com/apollographql/apollo-link-rest/issues/3) or the design [here](./designs/initial.md). We would love your help! If you want to get involved create or comment on an issue with interest! This could be writing, docs, testing, anything! We would love for you, yes you, to be a part of the Apollo community!
 
-Do not use it in production. There are still many things to do, if you want to contribute feel free to open an issue.
+## Contributing
+This projects uses TypeScript to bring static types to JavaScript and uses Jest for testing. To get started, clone the repo and run the following commands:
 
-The goal is to allow this kind of queries :
-
-```graphql
-query me {
-  post @rest(type: "Post", endpoint: "/post/1") {
-    id
-    title
-  }
-  user {
-    name
-    id
-  }
-}
+```bash
+npm install # you can also run `yarn`
 ```
 
-So that you can first use your REST API and adopt incrementally GraphQL on your server.
+To test the library you can run the following:
 
-Of course you do not get all the benefits of graphQL by using this package :
+```bash
+npm test # will run all tests once
 
-* Multiples requests are send when multiple `@rest` directives are found.
-* You get all the fields from your REST endpoints : filtering is done client side.
-
-## Example Queries
-
-```graphql
-query postTitle {
-  post @rest(type: "Post", endpoint: "/post/1") {
-    id
-    title
-  }
-}
+npm test -- --watch # will run the tests in watch mode, this is super useful when working on the project
 ```
 
-will make a call to your server and produce 
+To run the library locally in another project, you can do the following:
 
-```graphql
-post {
-  "__typename": "Post",
-  "id": 1,
-  "title": "Love apollo"
-}
+```bash
+npm link
+
+# in the project you want to run this in
+npm link apollo-link-rest
 ```
-
-You can pass a variable to a query
-
-```graphql
-query postTitle($id: ID!) {
-  post(id: $id) @rest(type: "Post", endpoint: "/post/:id") {
-    id
-    title
-  }
-}
-```
-
-
-You can make multiple calls in a query
-
-```graphql
-query postAndTags {
-  post @rest(type: "Post", endpoint: "/post/1") {
-    id
-    title
-  }
-  tags @rest(type: "Tag", endpoint: "/tags") {
-    name
-  }
-}
-```
-
-Please look into the *.test file to see cases we can handle.
-
-## Usage
-
-```js
-import RestLink from 'rest-api-link';
-
-const APILink = new RestLink({ uri: 'example.com/api' });
-
-const tagsQuery = gql`query tags {
-  tags @rest(type: "Tag", endpoint: "/tags") {
-    name
-  }
-}`;
-
-const data = await makePromise(execute(APILink, {
-  operationName: "tags",
-  query: tagsQuery
-}));
-
-```
-
-## Tests
-
-```shell
-yarn test
-```
-
->>>>>>> master
