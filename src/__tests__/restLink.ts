@@ -4,6 +4,43 @@ import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
 
+describe('Configuration Errors', () => {
+  it('throws without any config', () => {
+    expect.assertions(3);
+
+    expect(() => {
+      new RestLink();
+    }).toThrow();
+    expect(() => {
+      new RestLink({});
+    }).toThrow();
+    expect(() => {
+      new RestLink({ bogus: '' });
+    }).toThrow();
+  });
+
+  it('throws with mismatched config', () => {
+    expect.assertions(1);
+    expect(() => {
+      new RestLink({ uri: '/correct', endpoints: { '': '/mismatched' } });
+    }).toThrow();
+  });
+
+  it("Doesn't throw on good configs", () => {
+    expect.assertions(1);
+
+    new RestLink({ uri: '/correct' });
+    new RestLink({ uri: '/correct', endpoints: { other: '/other' } });
+    new RestLink({
+      uri: '/correct',
+      endpoints: { '': '/correct', other: '/other' },
+    });
+    new RestLink({ endpoints: { '': '/correct', other: '/other' } });
+
+    expect(true).toBe(true);
+  });
+});
+
 describe('Query single calls', () => {
   afterEach(() => {
     fetchMock.restore();
@@ -18,7 +55,7 @@ describe('Query single calls', () => {
 
     const postTitleQuery = gql`
       query postTitle {
-        post @rest(type: "Post", endpoint: "/post/1") {
+        post @rest(type: "Post", path: "/post/1") {
           id
           title
         }
@@ -44,7 +81,7 @@ describe('Query single calls', () => {
 
     const postTitleQuery = gql`
       query postTitle {
-        post @rest(endpoint: "/post/1", type: "Post") {
+        post @rest(path: "/post/1", type: "Post") {
           id
           title
         }
@@ -66,12 +103,12 @@ describe('Query single calls', () => {
 
     const link = new RestLink({ uri: '/api' });
 
-    const tags = [{ name: 'apollo' }, { name: 'grapql' }];
+    const tags = [{ name: 'apollo' }, { name: 'graphql' }];
     fetchMock.get('/api/tags', tags);
 
     const tagsQuery = gql`
       query tags {
-        tags @rest(type: "[Tag]", endpoint: "/tags") {
+        tags @rest(type: "[Tag]", path: "/tags") {
           name
         }
       }
@@ -102,7 +139,7 @@ describe('Query single calls', () => {
 
     const postTitleQuery = gql`
       query postTitle {
-        post @rest(type: "Post", endpoint: "/post/1") {
+        post @rest(type: "Post", path: "/post/1") {
           id
           title
         }
@@ -123,13 +160,12 @@ describe('Query single calls', () => {
     expect.assertions(1);
 
     const link = new RestLink({ uri: '/api' });
-
     const post = { id: '1', title: 'Love apollo' };
     fetchMock.get('/api/post/1', post);
 
     const postTitleQuery = gql`
       query postTitle {
-        post(id: "1") @rest(type: "Post", endpoint: "/post/:id") {
+        post @rest(type: "Post", path: "/post/1") {
           id
           title
         }
@@ -143,7 +179,7 @@ describe('Query single calls', () => {
       }),
     );
 
-    expect(data.post.title).toBe(post.title);
+    expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
   });
 
   it('can pass param to a query with a variable', async () => {
@@ -155,8 +191,8 @@ describe('Query single calls', () => {
     fetchMock.get('/api/post/1', post);
 
     const postTitleQuery = gql`
-      query postTitle($id: ID!) {
-        post(id: $id) @rest(type: "Post", endpoint: "/post/:id") {
+      query postTitle {
+        post(id: "1") @rest(type: "Post", path: "/post/:id") {
           id
           title
         }
@@ -173,6 +209,52 @@ describe('Query single calls', () => {
 
     expect(data.post.title).toBe(post.title);
   });
+
+  it('can hit two endpoints!', async () => {
+    expect.assertions(2);
+
+    const link = new RestLink({ endpoints: { v1: '/v1', v2: '/v2' } });
+
+    const postV1 = { id: '1', title: '1. Love apollo' };
+    const postV2 = { id: '1', titleText: '2. Love apollo' };
+    fetchMock.get('/v1/post/1', postV1);
+    fetchMock.get('/v2/post/1', postV2);
+
+    const postTitleQuery1 = gql`
+      query postTitle($id: ID!) {
+        post(id: $id) @rest(type: "Post", path: "/post/:id", endpoint: "v1") {
+          id
+          title
+        }
+      }
+    `;
+    const postTitleQuery2 = gql`
+      query postTitle($id: ID!) {
+        post(id: $id) @rest(type: "Post", path: "/post/:id", endpoint: "v2") {
+          id
+          titleText
+        }
+      }
+    `;
+
+    const data1 = await makePromise(
+      execute(link, {
+        operationName: 'postTitle1',
+        query: postTitleQuery1,
+        variables: { id: '1' },
+      }),
+    );
+    const data2 = await makePromise(
+      execute(link, {
+        operationName: 'postTitle2',
+        query: postTitleQuery2,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data1.post.title).toBe(postV1.title);
+    expect(data2.post.title).toBe(postV2.title);
+  });
 });
 
 describe('Query multiple calls', () => {
@@ -182,22 +264,23 @@ describe('Query multiple calls', () => {
 
   it('can run a query with multiple rest calls', async () => {
     expect.assertions(2);
+    ``;
 
     const link = new RestLink({ uri: '/api' });
 
     const post = { id: '1', title: 'Love apollo' };
     fetchMock.get('/api/post/1', post);
 
-    const tags = [{ name: 'apollo' }, { name: 'grapql' }];
+    const tags = [{ name: 'apollo' }, { name: 'graphql' }];
     fetchMock.get('/api/tags', tags);
 
     const postAndTags = gql`
       query postAndTags {
-        post @rest(type: "Post", endpoint: "/post/1") {
+        post @rest(type: "Post", path: "/post/1") {
           id
           title
         }
-        tags @rest(type: "[Tag]", endpoint: "/tags") {
+        tags @rest(type: "[Tag]", path: "/tags") {
           name
         }
       }
