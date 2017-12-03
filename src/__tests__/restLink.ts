@@ -3,6 +3,7 @@ import gql from 'graphql-tag';
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
+import { validateRequestMethodForOperationType } from '../restLink';
 
 describe('Configuration Errors', () => {
   it('throws without any config', () => {
@@ -397,6 +398,39 @@ describe('Query options', () => {
       }
 
       expect(fetchMock.called('/api/post/1')).toBe(false);
+    });
+  });
+});
+
+describe('validateRequestMethodForOperationType', () => {
+  const createRequestParams = (params = {}) => ({
+    name: 'post',
+    filteredKeys: [],
+    endpoint: `/api/post/1`,
+    method: 'POST',
+    __typename: 'Post',
+    ...params,
+  });
+  describe('for operation type "mutation"', () => {
+    it('throws because it is not supported yet', () => {
+      expect.assertions(1);
+      expect(() =>
+        validateRequestMethodForOperationType(
+          [createRequestParams()],
+          'mutation',
+        ),
+      ).toThrowError('A "mutation" operation is not supported yet.');
+    });
+  });
+  describe('for operation type "subscription"', () => {
+    it('throws because it is not supported yet', () => {
+      expect.assertions(1);
+      expect(() =>
+        validateRequestMethodForOperationType(
+          [createRequestParams()],
+          'subscription',
+        ),
+      ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
 });

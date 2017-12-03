@@ -154,7 +154,7 @@ async function processRequests(requestsParams) {
   }
 }
 
-const validateRequestMethodForOperationType = (
+export const validateRequestMethodForOperationType = (
   requestParams: Array<RequestParam>,
   operationType: OperationTypeNode,
 ) => {
