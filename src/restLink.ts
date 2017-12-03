@@ -1,6 +1,22 @@
+import { OperationTypeNode } from 'graphql';
 import { ApolloLink, Observable } from 'apollo-link';
 import { hasDirectives, getQueryDefinition } from 'apollo-utilities';
 import { filterObjectWithKeys, ArrayToObject } from './utils';
+
+export type RestLinkOptions = {
+  uri: string;
+  endpoints?: {
+    [endpointKey: string]: string;
+  };
+};
+
+type RequestParam = {
+  name: string;
+  filteredKeys: Array<string>;
+  endpoint: string;
+  method: string;
+  __typename: string;
+};
 
 const getRestDirective = selection =>
   selection.directives.filter(
@@ -22,6 +38,14 @@ const getPathFromDirective = directive => {
   return (pathArgument.value || {}).value;
 };
 
+const getMethodFromDirective = directive => {
+  const pathArgument =
+    directive.arguments.filter(
+      argument => argument.name.value === 'method',
+    )[0] || {};
+  return (pathArgument.value || {}).value;
+};
+
 const getEndpointFromDirective = directive => {
   const endpointArgument =
     directive.arguments.filter(
@@ -38,7 +62,7 @@ const getURIFromEndpoints = (endpoints, endpoint) => {
 };
 
 const getSelectionName = selection => selection.name.value;
-const getResultKeys = selection =>
+const getResultKeys = (selection): Array<string> =>
   selection.selectionSet.selections.map(({ name }) => name.value);
 
 const getQueryParams = selection =>
@@ -66,13 +90,14 @@ const replaceParamsInsidePath = (fullPath, queryParams, variables) => {
   return endpointWithInputVariables;
 };
 
-const getRequests = (selections, variables, endpoints) =>
+const getRequests = (selections, variables, endpoints): Array<RequestParam> =>
   selections.map(selection => {
     const selectionName = getSelectionName(selection);
     const filteredKeys = getResultKeys(selection);
     const directive = getRestDirective(selection);
     const endpoint = getEndpointFromDirective(directive) || '';
     const path = getPathFromDirective(directive) || '';
+    const method = getMethodFromDirective(directive) || 'GET';
     const __typename = getTypeNameFromDirective(directive);
     const queryParams = getQueryParams(selection);
 
@@ -89,6 +114,7 @@ const getRequests = (selections, variables, endpoints) =>
       name: selectionName,
       filteredKeys,
       endpoint: `${endpointAndPathWithParams}`,
+      method,
       __typename,
     };
   });
@@ -107,9 +133,9 @@ const filterResultWithKeys = (result, keys) => {
   return filterObjectWithKeys(result, keys);
 };
 
-const processRequest = ({ name, filteredKeys, endpoint, __typename }) =>
+const processRequest = ({ name, filteredKeys, endpoint, method, __typename }) =>
   new Promise((resolve, reject) => {
-    fetch(endpoint)
+    fetch(endpoint, { method })
       .then(res => res.json())
       .then(data => {
         const dataFiltered = filterResultWithKeys(data, filteredKeys);
@@ -127,6 +153,36 @@ async function processRequests(requestsParams) {
     throw new Error(error);
   }
 }
+
+const validateRequestMethodForOperationType = (
+  requestParams: Array<RequestParam>,
+  operationType: OperationTypeNode,
+) => {
+  /**
+   * NOTE: possible improvements
+   * - use typed errors (e.g. ValidationError, MethodNotSupportedError)
+   * - validate all requests before throwing the error
+   */
+  requestParams.forEach(({ method }) => {
+    switch (operationType) {
+      case 'query':
+        if (method.toUpperCase() !== 'GET') {
+          throw new Error(
+            `A "query" operation can only support "GET" requests but got "${method}".`,
+          );
+        }
+        return;
+      case 'mutation':
+        throw new Error('A "mutation" operation is not supported yet.');
+      case 'subscription':
+        throw new Error('A "subscription" operation is not supported yet.');
+      default:
+        // ignore
+        return;
+    }
+  });
+};
+
 /**
  * Default key to use when the @rest directive omits the "endpoint" parameter.
  */
@@ -139,7 +195,7 @@ const DEFAULT_ENDPOINT_KEY = '';
  */
 export class RestLink extends ApolloLink {
   private endpoints: { [endpointKey: string]: string };
-  constructor({ uri, endpoints }) {
+  constructor({ uri, endpoints }: RestLinkOptions) {
     super();
     const fallback = {};
     fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
@@ -177,6 +233,11 @@ export class RestLink extends ApolloLink {
       const { variables } = operation;
       const { selectionSet: { selections } } = queryDefinition;
       const requestsParams = getRequests(selections, variables, this.endpoints);
+
+      validateRequestMethodForOperationType(
+        requestsParams,
+        queryDefinition.operation,
+      );
 
       try {
         const result = processRequests(requestsParams);
