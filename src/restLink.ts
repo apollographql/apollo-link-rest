@@ -8,6 +8,9 @@ export type RestLinkOptions = {
   endpoints?: {
     [endpointKey: string]: string;
   };
+  headers?: {
+    [headerKey: string]: string;
+  };
 };
 
 type RequestParam = {
@@ -133,9 +136,16 @@ const filterResultWithKeys = (result, keys) => {
   return filterObjectWithKeys(result, keys);
 };
 
-const processRequest = ({ name, filteredKeys, endpoint, method, __typename }) =>
+const processRequest = ({
+  name,
+  filteredKeys,
+  endpoint,
+  method,
+  headers,
+  __typename,
+}) =>
   new Promise((resolve, reject) => {
-    fetch(endpoint, { method })
+    fetch(endpoint, { method, headers })
       .then(res => res.json())
       .then(data => {
         const dataFiltered = filterResultWithKeys(data, filteredKeys);
@@ -195,7 +205,8 @@ const DEFAULT_ENDPOINT_KEY = '';
  */
 export class RestLink extends ApolloLink {
   private endpoints: { [endpointKey: string]: string };
-  constructor({ uri, endpoints }: RestLinkOptions) {
+  private headers: { [headerKey: string]: string };
+  constructor({ uri, endpoints, headers }: RestLinkOptions) {
     super();
     const fallback = {};
     fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
@@ -219,6 +230,8 @@ export class RestLink extends ApolloLink {
     // if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
     //   console.warn("RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!");
     // }
+
+    this.headers = headers || {};
   }
 
   request(operation) {
@@ -232,7 +245,18 @@ export class RestLink extends ApolloLink {
       const queryDefinition = getQueryDefinition(query);
       const { variables } = operation;
       const { selectionSet: { selections } } = queryDefinition;
-      const requestsParams = getRequests(selections, variables, this.endpoints);
+      const { headers: headersFromContext } = operation.getContext();
+      const requestsParams = getRequests(
+        selections,
+        variables,
+        this.endpoints,
+      ).map(params => ({
+        ...params,
+        headers: {
+          ...this.headers,
+          ...(headersFromContext || {}),
+        },
+      }));
 
       validateRequestMethodForOperationType(
         requestsParams,

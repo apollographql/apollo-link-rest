@@ -1,4 +1,4 @@
-import { execute, makePromise } from 'apollo-link';
+import { execute, makePromise, ApolloLink } from 'apollo-link';
 import gql from 'graphql-tag';
 import * as fetchMock from 'fetch-mock';
 
@@ -398,6 +398,137 @@ describe('Query options', () => {
       }
 
       expect(fetchMock.called('/api/post/1')).toBe(false);
+    });
+  });
+  describe('headers', () => {
+    it('adds headers to the request from the context', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          headers: { authorization: '1234' },
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({ uri: '/api' }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            authorization: '1234',
+          }),
+        }),
+      );
+    });
+    it('adds headers to the request from the setup', async () => {
+      const link = new RestLink({
+        uri: '/api',
+        headers: { authorization: '1234' },
+      });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            authorization: '1234',
+          }),
+        }),
+      );
+    });
+    it('prioritizes context headers over setup headers', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          headers: { authorization: '1234' },
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({ uri: '/api', headers: { authorization: 'no user' } }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            authorization: '1234',
+          }),
+        }),
+      );
     });
   });
 });
