@@ -3,6 +3,7 @@ import gql from 'graphql-tag';
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
+import { validateRequestMethodForOperationType } from '../restLink';
 
 describe('Configuration Errors', () => {
   it('throws without any config', () => {
@@ -295,5 +296,141 @@ describe('Query multiple calls', () => {
 
     expect(data.post).toBeDefined();
     expect(data.tags).toBeDefined();
+  });
+});
+
+describe('Query options', () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+  describe('method', () => {
+    it('works for GET requests', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id", method: "GET") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('works without specifying a request method', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'GET' }),
+      );
+    });
+
+    it('throws if method is not GET', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id", method: "POST") {
+            id
+            title
+          }
+        }
+      `;
+
+      try {
+        await makePromise(
+          execute(link, {
+            operationName: 'postTitle',
+            query: postTitleQuery,
+            variables: { id: '1' },
+          }),
+        );
+      } catch (error) {
+        expect(error.message).toBe(
+          'A "query" operation can only support "GET" requests but got "POST".',
+        );
+      }
+
+      expect(fetchMock.called('/api/post/1')).toBe(false);
+    });
+  });
+});
+
+describe('validateRequestMethodForOperationType', () => {
+  const createRequestParams = (params = {}) => ({
+    name: 'post',
+    filteredKeys: [],
+    endpoint: `/api/post/1`,
+    method: 'POST',
+    __typename: 'Post',
+    ...params,
+  });
+  describe('for operation type "mutation"', () => {
+    it('throws because it is not supported yet', () => {
+      expect.assertions(1);
+      expect(() =>
+        validateRequestMethodForOperationType(
+          [createRequestParams()],
+          'mutation',
+        ),
+      ).toThrowError('A "mutation" operation is not supported yet.');
+    });
+  });
+  describe('for operation type "subscription"', () => {
+    it('throws because it is not supported yet', () => {
+      expect.assertions(1);
+      expect(() =>
+        validateRequestMethodForOperationType(
+          [createRequestParams()],
+          'subscription',
+        ),
+      ).toThrowError('A "subscription" operation is not supported yet.');
+    });
   });
 });
