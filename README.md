@@ -30,4 +30,4 @@ npm link
 
 # in the project you want to run this in
 npm link apollo-link-rest
-```js
+```
