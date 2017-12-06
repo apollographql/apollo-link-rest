@@ -650,6 +650,40 @@ describe('Configuration', () => {
         );
       });
     });
+    describe('export', () => {
+      it('can use a variable from export', async () => {
+        expect.assertions(1);
+
+        const link = new RestLink({ uri: '/api' });
+
+        const post = { id: '1', title: 'Love apollo', tagId: 6 };
+        fetchMock.get('/api/post/1', post);
+        const tag = { name: 'apollo' };
+        fetchMock.get('/api/tag/6', tag);
+
+        const postTagExport = gql`
+          query postTitle {
+            post(id: "1") @rest(type: "Post", path: "/post/:id") {
+              tagId @export(as: "tagId")
+              title
+              tag @rest(type: "Tag", path: "/tag/:tagId") {
+                name
+              }
+            }
+          }
+        `;
+
+        const data = await makePromise(
+          execute(link, {
+            operationName: 'postTitle',
+            query: postTagExport,
+            variables: { id: '1' },
+          }),
+        );
+
+        expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
+      });
+    });
   });
 
   describe('validateRequestMethodForOperationType', () => {

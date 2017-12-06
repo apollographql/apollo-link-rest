@@ -83,22 +83,29 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
+let exportVariables = {};
+
 const resolver = async (fieldName, root, args, context, info) => {
   const { directives, isLeaf, resultKey } = info;
+  if (root === null) {
+    exportVariables = {};
+  }
   if (isLeaf) {
-    return root[resultKey];
+    const leafValue = root[resultKey];
+    if (directives && directives.export) {
+      exportVariables[directives.export.as] = leafValue;
+    }
+    return leafValue;
   }
   const { endpoints, headers } = context;
   const { path, endpoint } = directives.rest;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
-    let pathWithParams = path;
-    if (args) {
-      pathWithParams = Object.keys(args).reduce(
-        (acc, e) => replaceParam(acc, e, args[e]),
-        path,
-      );
-    }
+    const argsWithExport = { ...args, ...exportVariables };
+    let pathWithParams = Object.keys(argsWithExport).reduce(
+      (acc, e) => replaceParam(acc, e, argsWithExport[e]),
+      path,
+    );
     let { method, type } = directives.rest;
     if (!method) {
       method = 'GET';
@@ -152,11 +159,11 @@ export class RestLink extends ApolloLink {
       this.endpoints[DEFAULT_ENDPOINT_KEY] == uri;
     }
 
-    if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
-      console.warn(
-        'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
-      );
-    }
+    // if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
+    //   console.warn(
+    //     'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
+    //   );
+    // }
 
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.headers = headers || {};
@@ -193,7 +200,7 @@ export class RestLink extends ApolloLink {
           resolver,
           queryWithTypename,
           null,
-          { headers, endpoints: this.endpoints },
+          { headers, endpoints: this.endpoints, export: exportVariables },
           variables,
           resolverOptions,
         );
