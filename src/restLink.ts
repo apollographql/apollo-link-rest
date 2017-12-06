@@ -67,9 +67,9 @@ export const validateRequestMethodForOperationType = (
 };
 
 const resolver = async (fieldName, root, args, context, info) => {
-  const { directives, isLeaf } = info;
+  const { directives, isLeaf, resultKey } = info;
   if (isLeaf) {
-    return root[fieldName];
+    return root[resultKey];
   }
   const { endpoints, headers } = context;
   const { path, endpoint } = directives.rest;
