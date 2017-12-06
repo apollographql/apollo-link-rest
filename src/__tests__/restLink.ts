@@ -300,6 +300,41 @@ describe('Query multiple calls', () => {
     expect(data.post).toBeDefined();
     expect(data.tags).toBeDefined();
   });
+
+  it('can run a subquery with multiple rest calls', async () => {
+    expect.assertions(2);
+    ``;
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/post/1', post);
+
+    const tags = [{ name: 'apollo' }, { name: 'graphql' }];
+    fetchMock.get('/api/tags', tags);
+
+    const postAndTags = gql`
+      query postAndTags {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+          tags @rest(type: "[Tag]", path: "/tags") {
+            name
+          }
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: 'postAndTags',
+        query: postAndTags,
+      }),
+    );
+
+    expect(data.post).toBeDefined();
+    expect(data.post.tags).toBeDefined();
+  });
 });
 
 describe('Query options', () => {
