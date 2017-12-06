@@ -609,21 +609,11 @@ describe('Query options', () => {
 });
 
 describe('validateRequestMethodForOperationType', () => {
-  const createRequestParams = (params = {}) => ({
-    name: 'post',
-    filteredKeys: [],
-    endpoint: `/api/post/1`,
-    method: 'POST',
-    ...params,
-  });
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'mutation',
-        ),
+        validateRequestMethodForOperationType('POST', 'mutation'),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
   });
@@ -631,10 +621,7 @@ describe('validateRequestMethodForOperationType', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'subscription',
-        ),
+        validateRequestMethodForOperationType('POST', 'subscription'),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
