@@ -96,7 +96,7 @@ describe('Query single calls', () => {
       }),
     );
 
-    expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
+    expect(data).toMatchObject({ post });
   });
 
   it('can return array result with typename', async () => {
@@ -122,7 +122,10 @@ describe('Query single calls', () => {
       }),
     );
 
-    const tagsWithTypeName = tags.map(tag => ({ ...tag, __typename: '[Tag]' }));
+    const tagsWithTypeName = tags.map(tag => ({
+      ...tag,
+      __typename: '[Tag]',
+    }));
     expect(data).toMatchObject({ tags: tagsWithTypeName });
   });
 
@@ -254,7 +257,7 @@ describe('Query single calls', () => {
     );
 
     expect(data1.post.title).toBe(postV1.title);
-    expect(data2.post.title).toBe(postV2.title);
+    expect(data2.post.titleText).toBe(postV2.titleText);
   });
 });
 
@@ -539,7 +542,6 @@ describe('validateRequestMethodForOperationType', () => {
     filteredKeys: [],
     endpoint: `/api/post/1`,
     method: 'POST',
-    __typename: 'Post',
     ...params,
   });
   describe('for operation type "mutation"', () => {
