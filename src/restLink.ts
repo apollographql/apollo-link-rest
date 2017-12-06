@@ -7,7 +7,6 @@ import {
   FetchResult,
 } from 'apollo-link';
 import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
-import { print } from 'graphql/language/printer';
 import { graphql } from 'graphql-anywhere/lib/async';
 
 export type RestLinkOptions = {
