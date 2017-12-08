@@ -96,7 +96,7 @@ describe('Query single calls', () => {
       }),
     );
 
-    expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
+    expect(data).toMatchObject({ post });
   });
 
   it('can return array result with typename', async () => {
@@ -122,7 +122,10 @@ describe('Query single calls', () => {
       }),
     );
 
-    const tagsWithTypeName = tags.map(tag => ({ ...tag, __typename: '[Tag]' }));
+    const tagsWithTypeName = tags.map(tag => ({
+      ...tag,
+      __typename: '[Tag]',
+    }));
     expect(data).toMatchObject({ tags: tagsWithTypeName });
   });
 
@@ -254,7 +257,7 @@ describe('Query single calls', () => {
     );
 
     expect(data1.post.title).toBe(postV1.title);
-    expect(data2.post.title).toBe(postV2.title);
+    expect(data2.post.titleText).toBe(postV2.titleText);
   });
 });
 
@@ -296,6 +299,78 @@ describe('Query multiple calls', () => {
 
     expect(data.post).toBeDefined();
     expect(data.tags).toBeDefined();
+  });
+
+  it('can run a subquery with multiple rest calls', async () => {
+    expect.assertions(2);
+    ``;
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/post/1', post);
+
+    const tags = [{ name: 'apollo' }, { name: 'graphql' }];
+    fetchMock.get('/api/tags', tags);
+
+    const postAndTags = gql`
+      query postAndTags {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+          tags @rest(type: "[Tag]", path: "/tags") {
+            name
+          }
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: 'postAndTags',
+        query: postAndTags,
+      }),
+    );
+
+    expect(data.post).toBeDefined();
+    expect(data.post.tags).toBeDefined();
+  });
+
+  +it('GraphQL aliases should work', async () => {
+    expect.assertions(2);
+
+    const link = new RestLink({ endpoints: { v1: '/v1', v2: '/v2' } });
+
+    const postV1 = { id: '1', title: '1. Love apollo' };
+    const postV2 = { id: '1', titleText: '2. Love apollo' };
+    fetchMock.get('/v1/post/1', postV1);
+    fetchMock.get('/v2/post/1', postV2);
+
+    const postTitleQueries = gql`
+      query postTitle($id: ID!) {
+        v1: post(id: $id)
+          @rest(type: "Post", path: "/post/:id", endpoint: "v1") {
+          id
+          title
+        }
+        v2: post(id: $id)
+          @rest(type: "Post", path: "/post/:id", endpoint: "v2") {
+          id
+          titleText
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTitleQueries,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data.v1.title).toBe(postV1.title);
+    expect(data.v2.titleText).toBe(postV2.titleText);
   });
 });
 
@@ -534,22 +609,11 @@ describe('Query options', () => {
 });
 
 describe('validateRequestMethodForOperationType', () => {
-  const createRequestParams = (params = {}) => ({
-    name: 'post',
-    filteredKeys: [],
-    endpoint: `/api/post/1`,
-    method: 'POST',
-    __typename: 'Post',
-    ...params,
-  });
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'mutation',
-        ),
+        validateRequestMethodForOperationType('POST', 'mutation'),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
   });
@@ -557,10 +621,7 @@ describe('validateRequestMethodForOperationType', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'subscription',
-        ),
+        validateRequestMethodForOperationType('POST', 'subscription'),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
