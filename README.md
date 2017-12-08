@@ -1,7 +1,7 @@
 # apollo-link-rest
 
 ## Problem to solve
-You have an existing REST set of services that you have worked on for a long time. However the limitations of it are pilling up and you think GraphQL is a great solution to make your application faster and easier to develop. With `apollo-link-rest`, you can start trying out GraphQL without a full server. You can use it to prototype and even use it for third party services that don't yet have a GraphQL endpoint.
+You have an existing REST set of services that you have worked on for a long time. However the limitations of it are piling up and you think GraphQL is a great solution to make your application faster and easier to develop. With `apollo-link-rest`, you can start trying out GraphQL without a full server. You can use it to prototype and even use it for third party services that don't yet have a GraphQL endpoint.
 
 Apollo Link Rest lets you query traditional REST API endpoints while writing GraphQL. It is designed to work with Apollo Client, but can even be used on its own with Apollo Link.
 
@@ -9,7 +9,7 @@ Apollo Link Rest lets you query traditional REST API endpoints while writing Gra
 This library is under active development. For information on progress check out [this issue](https://github.com/apollographql/apollo-link-rest/issues/3) or the design [here](./designs/initial.md). We would love your help! If you want to get involved create or comment on an issue with interest! This could be writing, docs, testing, anything! We would love for you, yes you, to be a part of the Apollo community!
 
 ## Contributing
-This projects uses TypeScript to bring static types to JavaScript and uses Jest for testing. To get started, clone the repo and run the following commands:
+This project uses TypeScript to bring static types to JavaScript and uses Jest for testing. To get started, clone the repo and run the following commands:
 
 ```bash
 npm install # you can also run `yarn`
