@@ -1,48 +1,91 @@
 import { execute, makePromise, ApolloLink } from 'apollo-link';
 import gql from 'graphql-tag';
+import * as camelCase from 'camelcase';
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
 import { validateRequestMethodForOperationType } from '../restLink';
 
-describe('Configuration Errors', () => {
-  it('throws without any config', () => {
-    expect.assertions(3);
+describe('Configuration', () => {
+  describe('Errors', () => {
+    it('throws without any config', () => {
+      expect.assertions(3);
 
-    expect(() => {
-      new RestLink();
-    }).toThrow();
-    expect(() => {
-      new RestLink({});
-    }).toThrow();
-    expect(() => {
-      new RestLink({ bogus: '' });
-    }).toThrow();
-  });
-
-  it('throws with mismatched config', () => {
-    expect.assertions(1);
-    expect(() => {
-      new RestLink({ uri: '/correct', endpoints: { '': '/mismatched' } });
-    }).toThrow();
-  });
-
-  it("Doesn't throw on good configs", () => {
-    expect.assertions(1);
-
-    new RestLink({ uri: '/correct' });
-    new RestLink({ uri: '/correct', endpoints: { other: '/other' } });
-    new RestLink({
-      uri: '/correct',
-      endpoints: { '': '/correct', other: '/other' },
+      expect(() => {
+        new RestLink();
+      }).toThrow();
+      expect(() => {
+        new RestLink({});
+      }).toThrow();
+      expect(() => {
+        new RestLink({ bogus: '' });
+      }).toThrow();
     });
-    new RestLink({ endpoints: { '': '/correct', other: '/other' } });
 
-    expect(true).toBe(true);
+    it('throws with mismatched config', () => {
+      expect.assertions(1);
+      expect(() => {
+        new RestLink({ uri: '/correct', endpoints: { '': '/mismatched' } });
+      }).toThrow();
+    });
+
+    it("Doesn't throw on good configs", () => {
+      expect.assertions(1);
+
+      new RestLink({ uri: '/correct' });
+      new RestLink({ uri: '/correct', endpoints: { other: '/other' } });
+      new RestLink({
+        uri: '/correct',
+        endpoints: { '': '/correct', other: '/other' },
+      });
+      new RestLink({ endpoints: { '': '/correct', other: '/other' } });
+
+      expect(true).toBe(true);
+    });
+  });
+
+  describe('Field name normalizer', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('should apply fieldNameNormalizer if specified', async () => {
+      expect.assertions(2);
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+      const post = { id: '1', Title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const tags = [{ Name: 'apollo' }, { Name: 'graphql' }];
+      fetchMock.get('/api/tags', tags);
+
+      const postAndTags = gql`
+        query postAndTags {
+          post @rest(type: "Post", path: "/post/1") {
+            id
+            Title
+            Tags @rest(type: "[Tag]", path: "/tags") {
+              Name
+            }
+          }
+        }
+      `;
+
+      const data = await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postAndTags,
+        }),
+      );
+
+      expect(data.post.title).toBeDefined();
+      expect(data.post.tags[0].name).toBeDefined();
+    });
   });
 });
 
-describe('Query single calls', () => {
+describe('Query single call', () => {
   afterEach(() => {
     fetchMock.restore();
   });
@@ -609,11 +652,21 @@ describe('Query options', () => {
 });
 
 describe('validateRequestMethodForOperationType', () => {
+  const createRequestParams = (params = {}) => ({
+    name: 'post',
+    filteredKeys: [],
+    endpoint: `/api/post/1`,
+    method: 'POST',
+    ...params,
+  });
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType('POST', 'mutation'),
+        validateRequestMethodForOperationType(
+          [createRequestParams()],
+          'mutation',
+        ),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
   });
@@ -621,8 +674,27 @@ describe('validateRequestMethodForOperationType', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType('POST', 'subscription'),
+        validateRequestMethodForOperationType(
+          [createRequestParams()],
+          'subscription',
+        ),
       ).toThrowError('A "subscription" operation is not supported yet.');
+    });
+    describe('for operation type "mutation"', () => {
+      it('throws because it is not supported yet', () => {
+        expect.assertions(1);
+        expect(() =>
+          validateRequestMethodForOperationType('POST', 'mutation'),
+        ).toThrowError('A "mutation" operation is not supported yet.');
+      });
+    });
+    describe('for operation type "subscription"', () => {
+      it('throws because it is not supported yet', () => {
+        expect.assertions(1);
+        expect(() =>
+          validateRequestMethodForOperationType('POST', 'subscription'),
+        ).toThrowError('A "subscription" operation is not supported yet.');
+      });
     });
   });
 });

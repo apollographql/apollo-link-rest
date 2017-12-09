@@ -17,6 +17,7 @@ export type RestLinkOptions = {
   headers?: {
     [headerKey: string]: string;
   };
+  fieldNameNormalizer?: Function;
 };
 
 const addTypeNameToResult = (result, __typename) => {
@@ -38,6 +39,22 @@ const replaceParam = (endpoint, name, value) => {
     return endpoint;
   }
   return endpoint.replace(`:${name}`, value);
+};
+
+const convertObjectKeys = (object, converter) => {
+  return Object.keys(object)
+    .filter(e => e !== '__typename')
+    .reduce((acc, val) => {
+      let value = object[val];
+      if (typeof value === 'object') {
+        value = convertObjectKeys(value, converter);
+      }
+      if (Array.isArray(value)) {
+        value = value.map(e => convertObjectKeys(e, converter));
+      }
+      acc[converter(val)] = value;
+      return acc;
+    }, {});
 };
 
 export const validateRequestMethodForOperationType = (
@@ -108,7 +125,13 @@ const DEFAULT_ENDPOINT_KEY = '';
 export class RestLink extends ApolloLink {
   private endpoints: { [endpointKey: string]: string };
   private headers: { [headerKey: string]: string };
-  constructor({ uri, endpoints, headers }: RestLinkOptions) {
+  private fieldNameNormalizer: Function;
+  constructor({
+    uri,
+    endpoints,
+    headers,
+    fieldNameNormalizer,
+  }: RestLinkOptions) {
     super();
     const fallback = {};
     fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
@@ -135,6 +158,7 @@ export class RestLink extends ApolloLink {
       );
     }
 
+    this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.headers = headers || {};
   }
 
@@ -155,6 +179,14 @@ export class RestLink extends ApolloLink {
 
     const queryWithTypename = addTypenameToDocument(query);
 
+    let resolverOptions = {};
+    if (this.fieldNameNormalizer) {
+      resolverOptions = {
+        resultMapper: resultFields =>
+          convertObjectKeys(resultFields, this.fieldNameNormalizer),
+      };
+    }
+
     return new Observable(observer => {
       try {
         const result = graphql(
@@ -163,6 +195,7 @@ export class RestLink extends ApolloLink {
           null,
           { headers, endpoints: this.endpoints },
           variables,
+          resolverOptions,
         );
         observer.next(result);
         observer.complete();
