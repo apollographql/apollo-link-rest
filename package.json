@@ -38,6 +38,7 @@
   },
   "dependencies": {
     "apollo-link": "^1.0.3",
+    "cross-fetch": "^1.1.1",
     "graphql-anywhere": "^4.1.0-alpha.0"
   },
   "peerDependencies": {
