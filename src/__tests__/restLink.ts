@@ -83,6 +83,41 @@ describe('Configuration', () => {
       expect(data.post.tags[0].name).toBeDefined();
     });
   });
+
+  describe('Credentials', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+
+    it('adds credentials to the request from the setup', async () => {
+      expect.assertions(1);
+      const link = new RestLink({
+        uri: '/api',
+        credentials: 'my-credentials',
+      });
+
+      const post = { id: '1', Title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const query = gql`
+        query post {
+          post @rest(type: "Post", path: "/post/1") {
+            id
+          }
+        }
+      `;
+
+      const data = await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+  });
 });
 
 describe('Query single call', () => {
