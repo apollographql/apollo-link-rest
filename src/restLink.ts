@@ -218,26 +218,27 @@ export class RestLink extends ApolloLink {
     }
 
     return new Observable(observer => {
-      try {
-        const result = graphql(
-          resolver,
-          queryWithTypename,
-          null,
-          {
-            headers,
-            endpoints: this.endpoints,
-            export: exportVariables,
-            credentials,
-            customFetch: this.customFetch,
-          },
-          variables,
-          resolverOptions,
-        );
-        observer.next(result);
-        observer.complete();
-      } catch (err) {
-        observer.error.bind(observer);
-      }
+      graphql(
+        resolver,
+        queryWithTypename,
+        null,
+        {
+          headers,
+          endpoints: this.endpoints,
+          export: exportVariables,
+          credentials,
+          customFetch: this.customFetch,
+        },
+        variables,
+        resolverOptions,
+      )
+        .then(data => {
+          observer.next({ data });
+          observer.complete();
+        })
+        .catch(err => {
+          observer.error(err);
+        });
     });
   }
 }
