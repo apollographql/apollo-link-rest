@@ -9,17 +9,50 @@ import {
 import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
 import { graphql } from 'graphql-anywhere/lib/async';
 
-export type RestLinkOptions = {
-  uri: string;
-  endpoints?: {
+export namespace RestLink {
+  export type URI = string;
+
+  export interface Endpoints {
     [endpointKey: string]: string;
-  };
-  headers?: {
+  }
+
+  export interface Headers {
     [headerKey: string]: string;
+  }
+
+  export type FieldNameNormalizer = (fieldName: string) => string;
+
+  export type Credentials = string;
+
+  export type Options = {
+    /**
+     * The URI to use when fetching operations.
+     *
+     * Optional if endpoints provides a default.
+     */
+    uri?: URI;
+
+    /**
+     * A root endpoint (uri) to apply paths to or a map of endpoints.
+     */
+    endpoints?: Endpoints;
+
+    /**
+     * An object representing values to be sent as headers on the request.
+     */
+    headers?: Headers;
+
+    /**
+     * A function that takes the response field name and converts it into a GraphQL compliant name
+     */
+    fieldNameNormalizer?: FieldNameNormalizer;
+
+    /**
+     * The credentials policy you want to use for the fetch call.
+     */
+    credentials?: Credentials;
   };
-  fieldNameNormalizer?: Function;
-  credentials?: string;
-};
+}
 
 const addTypeNameToResult = (result, __typename) => {
   if (Array.isArray(result)) {
@@ -59,7 +92,7 @@ const convertObjectKeys = (object, converter) => {
 };
 
 export const validateRequestMethodForOperationType = (
-  method: String,
+  method: string,
   operationType: OperationTypeNode,
 ) => {
   /**
@@ -128,17 +161,17 @@ const DEFAULT_ENDPOINT_KEY = '';
  * - @param: endpoints: optional map of potential API endpoints this RestLink will hit.
  */
 export class RestLink extends ApolloLink {
-  private endpoints: { [endpointKey: string]: string };
-  private headers: { [headerKey: string]: string };
-  private fieldNameNormalizer: Function;
-  private credentials: string;
+  private endpoints: RestLink.Endpoints;
+  private headers: RestLink.Headers;
+  private fieldNameNormalizer: RestLink.FieldNameNormalizer;
+  private credentials: RestLink.Credentials;
   constructor({
     uri,
     endpoints,
     headers,
     fieldNameNormalizer,
     credentials,
-  }: RestLinkOptions) {
+  }: RestLink.Options) {
     super();
     const fallback = {};
     fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
@@ -184,12 +217,13 @@ export class RestLink extends ApolloLink {
       return forward(operation);
     }
 
-    const headers = {
+    const headers: RestLink.Headers = {
       ...this.headers,
       ...contextHeaders,
     };
 
-    const credentials = contextCredentials || this.credentials;
+    const credentials: RestLink.Credentials =
+      contextCredentials || this.credentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 
