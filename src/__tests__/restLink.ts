@@ -464,9 +464,43 @@ describe('Query options', () => {
           return result;
         });
       });
+
       const link = ApolloLink.from([
         credentialsMiddleware,
         new RestLink({ uri: '/api' }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await makePromise(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+
+    it('prioritizes context credentials over setup credentials', async () => {
+      expect.assertions(2);
+
+      const credentialsMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          credentials: 'my-credentials',
+        });
+        return forward(operation).map(result => {
+          const { credentials } = operation.getContext();
+          expect(credentials).toBeDefined();
+          return result;
+        });
+      });
+
+      const link = ApolloLink.from([
+        credentialsMiddleware,
+        new RestLink({ uri: '/api', credentials: 'wrong-credentials' }),
       ]);
 
       const post = { id: '1', title: 'Love apollo' };
