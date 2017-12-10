@@ -91,6 +91,41 @@ describe('Configuration', () => {
       expect(data.post.tags[0].name).toBeDefined();
     });
   });
+
+  describe('Custom fetch', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('should apply customFetch if specified', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({
+        uri: '/api',
+        customFetch: (uri, options) =>
+          new Promise((resolve, reject) => {
+            const body = JSON.stringify({ title: 'custom' });
+            resolve(new Response(body));
+          }),
+      });
+
+      const postTitle = gql`
+        query postTitle {
+          post @rest(type: "Post", path: "/post/1") {
+            title
+          }
+        }
+      `;
+
+      const data = await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitle,
+        }),
+      );
+
+      expect(data.post.title).toBe('custom');
+    });
+  });
 });
 
 describe('Query single call', () => {

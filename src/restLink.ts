@@ -18,6 +18,7 @@ export type RestLinkOptions = {
     [headerKey: string]: string;
   };
   fieldNameNormalizer?: Function;
+  customFetch?: Function;
   credentials?: string;
 };
 
@@ -98,7 +99,7 @@ const resolver = async (fieldName, root, args, context, info) => {
     }
     return leafValue;
   }
-  const { credentials, endpoints, headers } = context;
+  const { credentials, endpoints, headers, customFetch } = context;
   const { path, endpoint } = directives.rest;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
@@ -117,7 +118,7 @@ const resolver = async (fieldName, root, args, context, info) => {
       method = 'GET';
     }
     validateRequestMethodForOperationType(method, 'query');
-    return await fetch(`${uri}${pathWithParams}`, {
+    return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
       headers,
@@ -143,12 +144,14 @@ export class RestLink extends ApolloLink {
   private endpoints: { [endpointKey: string]: string };
   private headers: { [headerKey: string]: string };
   private fieldNameNormalizer: Function;
+  private customFetch: Function;
   private credentials: string;
   constructor({
     uri,
     endpoints,
     headers,
     fieldNameNormalizer,
+    customFetch,
     credentials,
   }: RestLinkOptions) {
     super();
@@ -180,6 +183,7 @@ export class RestLink extends ApolloLink {
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.headers = headers || {};
     this.credentials = credentials || null;
+    this.customFetch = customFetch;
   }
 
   public request(
@@ -219,7 +223,13 @@ export class RestLink extends ApolloLink {
           resolver,
           queryWithTypename,
           null,
-          { headers, credentials, endpoints: this.endpoints, export: exportVariables },
+          {
+            headers,
+            endpoints: this.endpoints,
+            export: exportVariables,
+            credentials,
+            customFetch: this.customFetch,
+          },
           variables,
           resolverOptions,
         );
