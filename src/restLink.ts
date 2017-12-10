@@ -12,12 +12,14 @@ import { graphql } from 'graphql-anywhere/lib/async';
 export namespace RestLink {
   export type URI = string;
 
+  export type Endpoint = string;
   export interface Endpoints {
-    [endpointKey: string]: string;
+    [endpointKey: string]: Endpoint;
   }
 
+  export type Header = string;
   export interface Headers {
-    [headerKey: string]: string;
+    [headerKey: string]: Header;
   }
 
   export type FieldNameNormalizer = (fieldName: string) => string;
@@ -54,14 +56,20 @@ export namespace RestLink {
   };
 }
 
-const addTypeNameToResult = (result, __typename) => {
+const addTypeNameToResult = (
+  result: any[] | object,
+  __typename: string,
+): any[] | object => {
   if (Array.isArray(result)) {
     return result.map(e => ({ ...e, __typename }));
   }
   return { ...result, __typename };
 };
 
-const getURIFromEndpoints = (endpoints, endpoint) => {
+const getURIFromEndpoints = (
+  endpoints: RestLink.Endpoints,
+  endpoint: RestLink.Endpoint,
+): RestLink.URI => {
   return (
     endpoints[endpoint || DEFAULT_ENDPOINT_KEY] ||
     endpoints[DEFAULT_ENDPOINT_KEY]
@@ -165,6 +173,7 @@ export class RestLink extends ApolloLink {
   private headers: RestLink.Headers;
   private fieldNameNormalizer: RestLink.FieldNameNormalizer;
   private credentials: RestLink.Credentials;
+
   constructor({
     uri,
     endpoints,
