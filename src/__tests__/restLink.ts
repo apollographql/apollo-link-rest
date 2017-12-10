@@ -6,6 +6,14 @@ import * as fetchMock from 'fetch-mock';
 import { RestLink } from '../';
 import { validateRequestMethodForOperationType } from '../restLink';
 
+const sampleQuery = gql`
+  query post {
+    post(id: "1") @rest(type: "Post", path: "/post/:id") {
+      id
+    }
+  }
+`;
+
 describe('Configuration', () => {
   describe('Errors', () => {
     it('throws without any config', () => {
@@ -81,41 +89,6 @@ describe('Configuration', () => {
 
       expect(data.post.title).toBeDefined();
       expect(data.post.tags[0].name).toBeDefined();
-    });
-  });
-
-  describe('Credentials', () => {
-    afterEach(() => {
-      fetchMock.restore();
-    });
-
-    it('adds credentials to the request from the setup', async () => {
-      expect.assertions(1);
-      const link = new RestLink({
-        uri: '/api',
-        credentials: 'my-credentials',
-      });
-
-      const post = { id: '1', Title: 'Love apollo' };
-      fetchMock.get('/api/post/1', post);
-
-      const query = gql`
-        query post {
-          post @rest(type: "Post", path: "/post/1") {
-            id
-          }
-        }
-      `;
-
-      const data = await makePromise(
-        execute(link, {
-          operationName: 'postTitle',
-          query,
-        }),
-      );
-
-      const credentials = fetchMock.lastCall()[1].credentials;
-      expect(credentials).toBe('my-credentials');
     });
   });
 });
@@ -455,6 +428,60 @@ describe('Query multiple calls', () => {
 describe('Query options', () => {
   afterEach(() => {
     fetchMock.restore();
+  });
+  describe('credentials', () => {
+    it('adds credentials to the request from the setup', async () => {
+      expect.assertions(1);
+      const link = new RestLink({
+        uri: '/api',
+        credentials: 'my-credentials',
+      });
+
+      const post = { id: '1', Title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await makePromise(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+
+    it('adds credentials to the request from the context', async () => {
+      expect.assertions(2);
+
+      const credentialsMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          credentials: 'my-credentials',
+        });
+        return forward(operation).map(result => {
+          const { credentials } = operation.getContext();
+          expect(credentials).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        credentialsMiddleware,
+        new RestLink({ uri: '/api' }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await makePromise(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
   });
   describe('method', () => {
     it('works for GET requests', async () => {
