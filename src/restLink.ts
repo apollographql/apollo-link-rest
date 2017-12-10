@@ -18,6 +18,7 @@ export type RestLinkOptions = {
     [headerKey: string]: string;
   };
   fieldNameNormalizer?: Function;
+  credentials?: string;
 };
 
 const addTypeNameToResult = (result, __typename) => {
@@ -97,7 +98,7 @@ const resolver = async (fieldName, root, args, context, info) => {
     }
     return leafValue;
   }
-  const { endpoints, headers } = context;
+  const { credentials, endpoints, headers } = context;
   const { path, endpoint } = directives.rest;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
@@ -111,7 +112,11 @@ const resolver = async (fieldName, root, args, context, info) => {
       method = 'GET';
     }
     validateRequestMethodForOperationType(method, 'query');
-    return await fetch(`${uri}${pathWithParams}`, { method, headers })
+    return await fetch(`${uri}${pathWithParams}`, {
+      credentials,
+      method,
+      headers,
+    })
       .then(res => res.json())
       .then(result => addTypeNameToResult(result, type));
   } catch (error) {
@@ -133,11 +138,13 @@ export class RestLink extends ApolloLink {
   private endpoints: { [endpointKey: string]: string };
   private headers: { [headerKey: string]: string };
   private fieldNameNormalizer: Function;
+  private credentials: string;
   constructor({
     uri,
     endpoints,
     headers,
     fieldNameNormalizer,
+    credentials,
   }: RestLinkOptions) {
     super();
     const fallback = {};
@@ -167,13 +174,18 @@ export class RestLink extends ApolloLink {
 
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.headers = headers || {};
+    this.credentials = credentials || null;
   }
 
   public request(
     operation: Operation,
     forward?: NextLink,
   ): Observable<FetchResult> | null {
-    const { query, variables } = operation;
+    const { query, variables, getContext } = operation;
+    const {
+      headers: contextHeaders = {},
+      credentials: contextCredentials,
+    } = getContext();
     const isRestQuery = hasDirectives(['rest'], operation.query);
     if (!isRestQuery) {
       return forward(operation);
@@ -181,8 +193,10 @@ export class RestLink extends ApolloLink {
 
     const headers = {
       ...this.headers,
-      ...(operation.getContext().headers || {}),
+      ...contextHeaders,
     };
+
+    const credentials = contextCredentials || this.credentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 
@@ -200,7 +214,12 @@ export class RestLink extends ApolloLink {
           resolver,
           queryWithTypename,
           null,
-          { headers, endpoints: this.endpoints, export: exportVariables },
+          {
+            headers,
+            endpoints: this.endpoints,
+            export: exportVariables,
+            credentials,
+          },
           variables,
           resolverOptions,
         );

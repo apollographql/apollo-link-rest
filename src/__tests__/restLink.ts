@@ -6,6 +6,14 @@ import * as fetchMock from 'fetch-mock';
 import { RestLink } from '../';
 import { validateRequestMethodForOperationType } from '../restLink';
 
+const sampleQuery = gql`
+  query post {
+    post(id: "1") @rest(type: "Post", path: "/post/:id") {
+      id
+    }
+  }
+`;
+
 describe('Configuration', () => {
   describe('Errors', () => {
     it('throws without any config', () => {
@@ -421,6 +429,94 @@ describe('Query options', () => {
   afterEach(() => {
     fetchMock.restore();
   });
+  describe('credentials', () => {
+    it('adds credentials to the request from the setup', async () => {
+      expect.assertions(1);
+      const link = new RestLink({
+        uri: '/api',
+        credentials: 'my-credentials',
+      });
+
+      const post = { id: '1', Title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await makePromise(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+
+    it('adds credentials to the request from the context', async () => {
+      expect.assertions(2);
+
+      const credentialsMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          credentials: 'my-credentials',
+        });
+        return forward(operation).map(result => {
+          const { credentials } = operation.getContext();
+          expect(credentials).toBeDefined();
+          return result;
+        });
+      });
+
+      const link = ApolloLink.from([
+        credentialsMiddleware,
+        new RestLink({ uri: '/api' }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await makePromise(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+
+    it('prioritizes context credentials over setup credentials', async () => {
+      expect.assertions(2);
+
+      const credentialsMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          credentials: 'my-credentials',
+        });
+        return forward(operation).map(result => {
+          const { credentials } = operation.getContext();
+          expect(credentials).toBeDefined();
+          return result;
+        });
+      });
+
+      const link = ApolloLink.from([
+        credentialsMiddleware,
+        new RestLink({ uri: '/api', credentials: 'wrong-credentials' }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await makePromise(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+  });
   describe('method', () => {
     it('works for GET requests', async () => {
       expect.assertions(1);
@@ -669,50 +765,16 @@ describe('validateRequestMethodForOperationType', () => {
         ),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
-    describe('export', () => {
-      it('can use a variable from export', async () => {
+    describe('for operation type "subscription"', () => {
+      it('throws because it is not supported yet', () => {
         expect.assertions(1);
-
-        const link = new RestLink({ uri: '/api' });
-
-        const post = { id: '1', title: 'Love apollo', tagId: 6 };
-        fetchMock.get('/api/post/1', post);
-        const tag = { name: 'apollo' };
-        fetchMock.get('/api/tag/6', tag);
-
-        const postTagExport = gql`
-          query postTitle {
-            post(id: "1") @rest(type: "Post", path: "/post/:id") {
-              tagId @export(as: "tagId")
-              title
-              tag @rest(type: "Tag", path: "/tag/:tagId") {
-                name
-              }
-            }
-          }
-        `;
-
-        const data = await makePromise(
-          execute(link, {
-            operationName: 'postTitle',
-            query: postTagExport,
-            variables: { id: '1' },
-          }),
-        );
-
-        expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
+        expect(() =>
+          validateRequestMethodForOperationType(
+            [createRequestParams()],
+            'subscription',
+          ),
+        ).toThrowError('A "subscription" operation is not supported yet.');
       });
-    });
-  });
-  describe('for operation type "subscription"', () => {
-    it('throws because it is not supported yet', () => {
-      expect.assertions(1);
-      expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'subscription',
-        ),
-      ).toThrowError('A "subscription" operation is not supported yet.');
     });
     describe('for operation type "mutation"', () => {
       it('throws because it is not supported yet', () => {
@@ -730,5 +792,40 @@ describe('validateRequestMethodForOperationType', () => {
         ).toThrowError('A "subscription" operation is not supported yet.');
       });
     });
+  });
+});
+
+describe('export', () => {
+  it('can use a variable from export', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo', tagId: 6 };
+    fetchMock.get('/api/post/1', post);
+    const tag = { name: 'apollo' };
+    fetchMock.get('/api/tag/6', tag);
+
+    const postTagExport = gql`
+      query postTitle {
+        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+          tagId @export(as: "tagId")
+          title
+          tag @rest(type: "Tag", path: "/tag/:tagId") {
+            name
+          }
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTagExport,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
   });
 });
