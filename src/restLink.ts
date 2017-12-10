@@ -107,6 +107,11 @@ const resolver = async (fieldName, root, args, context, info) => {
       (acc, e) => replaceParam(acc, e, argsWithExport[e]),
       path,
     );
+    if (pathWithParams.includes(':')) {
+      throw new Error(
+        'Missing params to run query, specify it in the query params or use an export directive',
+      );
+    }
     let { method, type } = directives.rest;
     if (!method) {
       method = 'GET';
@@ -166,11 +171,11 @@ export class RestLink extends ApolloLink {
       this.endpoints[DEFAULT_ENDPOINT_KEY] == uri;
     }
 
-    // if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
-    //   console.warn(
-    //     'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
-    //   );
-    // }
+    if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
+      console.warn(
+        'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
+      );
+    }
 
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.headers = headers || {};
@@ -214,7 +219,7 @@ export class RestLink extends ApolloLink {
           resolver,
           queryWithTypename,
           null,
-          { headers, endpoints: this.endpoints, export: exportVariables },
+          { headers, credentials, endpoints: this.endpoints, export: exportVariables },
           variables,
           resolverOptions,
         );

@@ -765,40 +765,6 @@ describe('validateRequestMethodForOperationType', () => {
         ),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
-    describe('export', () => {
-      it('can use a variable from export', async () => {
-        expect.assertions(1);
-
-        const link = new RestLink({ uri: '/api' });
-
-        const post = { id: '1', title: 'Love apollo', tagId: 6 };
-        fetchMock.get('/api/post/1', post);
-        const tag = { name: 'apollo' };
-        fetchMock.get('/api/tag/6', tag);
-
-        const postTagExport = gql`
-          query postTitle {
-            post(id: "1") @rest(type: "Post", path: "/post/:id") {
-              tagId @export(as: "tagId")
-              title
-              tag @rest(type: "Tag", path: "/tag/:tagId") {
-                name
-              }
-            }
-          }
-        `;
-
-        const data = await makePromise(
-          execute(link, {
-            operationName: 'postTitle',
-            query: postTagExport,
-            variables: { id: '1' },
-          }),
-        );
-
-        expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
-      });
-    });
   });
   describe('for operation type "subscription"', () => {
     it('throws because it is not supported yet', () => {
@@ -826,5 +792,117 @@ describe('validateRequestMethodForOperationType', () => {
         validateRequestMethodForOperationType('POST', 'subscription'),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
+  });
+});
+
+describe('export directive', () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+  it('should throw an error if export is missing', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo', tagId: 6 };
+    fetchMock.get('/api/post/1', post);
+
+    const postTagWithoutExport = gql`
+      query postTitle {
+        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+          tagId
+          title
+          tag @rest(type: "Tag", path: "/tag/:tagId") {
+            name
+          }
+        }
+      }
+    `;
+
+    try {
+      await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTagWithoutExport,
+          variables: { id: '1' },
+        }),
+      );
+    } catch (e) {
+      expect(e.message).toBe(
+        'Missing params to run query, specify it in the query params or use an export directive',
+      );
+    }
+  });
+  it('can use a variable from export', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo', tagId: 6 };
+    fetchMock.get('/api/post/1', post);
+    const tag = { name: 'apollo' };
+    fetchMock.get('/api/tag/6', tag);
+
+    const postTagExport = gql`
+      query postTitle {
+        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+          tagId @export(as: "tagId")
+          title
+          tag @rest(type: "Tag", path: "/tag/:tagId") {
+            name
+          }
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTagExport,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
+  });
+
+  it('can use two variables from export', async () => {
+    expect.assertions(2);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo', tagId: 6, postAuthor: 10 };
+    fetchMock.get('/api/post/1', post);
+    const tag = { name: 'apollo' };
+    fetchMock.get('/api/tag/6', tag);
+    const author = { name: 'Sashko' };
+    fetchMock.get('/api/users/10', author);
+
+    const postTagExport = gql`
+      query postTitle {
+        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+          tagId @export(as: "tagId")
+          postAuthor @export(as: "authorId")
+          title
+          tag @rest(type: "Tag", path: "/tag/:tagId") {
+            name
+          }
+          author @rest(type: "User", path: "/users/:authorId") {
+            name
+          }
+        }
+      }
+    `;
+
+    const data = await makePromise(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTagExport,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
+    expect(data.post.author).toEqual({ ...author, __typename: 'User' });
   });
 });
