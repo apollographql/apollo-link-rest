@@ -165,8 +165,6 @@ const DEFAULT_ENDPOINT_KEY = '';
 
 /**
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
- * - @param: uri: default URI, optional if endpoints provides a default.
- * - @param: endpoints: optional map of potential API endpoints this RestLink will hit.
  */
 export class RestLink extends ApolloLink {
   private endpoints: RestLink.Endpoints;
