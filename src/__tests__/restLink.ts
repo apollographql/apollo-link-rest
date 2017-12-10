@@ -776,21 +776,21 @@ describe('validateRequestMethodForOperationType', () => {
         ),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
-    describe('for operation type "mutation"', () => {
-      it('throws because it is not supported yet', () => {
-        expect.assertions(1);
-        expect(() =>
-          validateRequestMethodForOperationType('POST', 'mutation'),
-        ).toThrowError('A "mutation" operation is not supported yet.');
-      });
+  });
+  describe('for operation type "mutation"', () => {
+    it('throws because it is not supported yet', () => {
+      expect.assertions(1);
+      expect(() =>
+        validateRequestMethodForOperationType('POST', 'mutation'),
+      ).toThrowError('A "mutation" operation is not supported yet.');
     });
-    describe('for operation type "subscription"', () => {
-      it('throws because it is not supported yet', () => {
-        expect.assertions(1);
-        expect(() =>
-          validateRequestMethodForOperationType('POST', 'subscription'),
-        ).toThrowError('A "subscription" operation is not supported yet.');
-      });
+  });
+  describe('for operation type "subscription"', () => {
+    it('throws because it is not supported yet', () => {
+      expect.assertions(1);
+      expect(() =>
+        validateRequestMethodForOperationType('POST', 'subscription'),
+      ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
 });
