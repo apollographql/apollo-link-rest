@@ -22,7 +22,9 @@ export namespace RestLink {
     [headerKey: string]: Header;
   }
 
-  export type FieldNameNormalizer = (fieldName: string) => string;
+  export interface FieldNameNormalizer {
+    (fieldName: string): string;
+  }
 
   export type Credentials = string;
 
