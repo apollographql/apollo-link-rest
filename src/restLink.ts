@@ -174,7 +174,11 @@ export class RestLink extends ApolloLink {
     operation: Operation,
     forward?: NextLink,
   ): Observable<FetchResult> | null {
-    const { query, variables } = operation;
+    const { query, variables, getContext } = operation;
+    const {
+      headers: contextHeaders = {},
+      credentials: contextCredentials,
+    } = getContext();
     const isRestQuery = hasDirectives(['rest'], operation.query);
     if (!isRestQuery) {
       return forward(operation);
@@ -182,10 +186,10 @@ export class RestLink extends ApolloLink {
 
     const headers = {
       ...this.headers,
-      ...(operation.getContext().headers || {}),
+      ...contextHeaders,
     };
 
-    const credentials = this.credentials;
+    const credentials = this.credentials || contextCredentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 
