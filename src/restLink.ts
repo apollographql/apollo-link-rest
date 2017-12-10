@@ -189,7 +189,7 @@ export class RestLink extends ApolloLink {
       ...contextHeaders,
     };
 
-    const credentials = this.credentials || contextCredentials;
+    const credentials = contextCredentials || this.credentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 
