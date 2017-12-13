@@ -1,4 +1,6 @@
 import { execute, makePromise, ApolloLink } from 'apollo-link';
+import { ApolloClient } from 'apollo-client';
+import { InMemoryCache } from 'apollo-cache-inmemory';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
 import * as fetchMock from 'fetch-mock';
@@ -80,7 +82,7 @@ describe('Configuration', () => {
         }
       `;
 
-      const data = await makePromise(
+      const { data } = await makePromise(
         execute(link, {
           operationName: 'postTitle',
           query: postAndTags,
@@ -116,7 +118,7 @@ describe('Configuration', () => {
         }
       `;
 
-      const data = await makePromise(
+      const { data } = await makePromise(
         execute(link, {
           operationName: 'postTitle',
           query: postTitle,
@@ -149,7 +151,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -175,7 +177,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -201,7 +203,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'tags',
         query: tagsQuery,
@@ -236,7 +238,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postWithContent',
         query: postTitleQuery,
@@ -262,7 +264,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -289,7 +291,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -327,14 +329,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const data1 = await makePromise(
+    const { data: data1 } = await makePromise(
       execute(link, {
         operationName: 'postTitle1',
         query: postTitleQuery1,
         variables: { id: '1' },
       }),
     );
-    const data2 = await makePromise(
+    const { data: data2 } = await makePromise(
       execute(link, {
         operationName: 'postTitle2',
         query: postTitleQuery2,
@@ -376,7 +378,7 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postAndTags',
         query: postAndTags,
@@ -411,7 +413,7 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postAndTags',
         query: postAndTags,
@@ -447,7 +449,7 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQueries,
@@ -890,7 +892,7 @@ describe('export directive', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTagExport,
@@ -929,7 +931,7 @@ describe('export directive', () => {
       }
     `;
 
-    const data = await makePromise(
+    const { data } = await makePromise(
       execute(link, {
         operationName: 'postTitle',
         query: postTagExport,
@@ -939,5 +941,40 @@ describe('export directive', () => {
 
     expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
     expect(data.post.author).toEqual({ ...author, __typename: 'User' });
+  });
+});
+
+describe('Apollo client integration', () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+
+  it('can integrate with apollo client', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/post/1', post);
+
+    const postTagExport = gql`
+      query {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+        }
+      }
+    `;
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link,
+    });
+
+    const { data } = await client.query({
+      query: postTagExport,
+    });
+
+    expect(data.post).toBeDefined();
   });
 });
