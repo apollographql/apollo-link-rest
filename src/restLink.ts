@@ -84,20 +84,32 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
+let exportVariables = {};
+
 const resolver = async (fieldName, root, args, context, info) => {
   const { directives, isLeaf, resultKey } = info;
+  if (root === null) {
+    exportVariables = {};
+  }
   if (isLeaf) {
-    return root[resultKey];
+    const leafValue = root[resultKey];
+    if (directives && directives.export) {
+      exportVariables[directives.export.as] = leafValue;
+    }
+    return leafValue;
   }
   const { credentials, endpoints, headers } = context;
   const { path, endpoint } = directives.rest;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
-    let pathWithParams = path;
-    if (args) {
-      pathWithParams = Object.keys(args).reduce(
-        (acc, e) => replaceParam(acc, e, args[e]),
-        path,
+    const argsWithExport = { ...args, ...exportVariables };
+    let pathWithParams = Object.keys(argsWithExport).reduce(
+      (acc, e) => replaceParam(acc, e, argsWithExport[e]),
+      path,
+    );
+    if (pathWithParams.includes(':')) {
+      throw new Error(
+        'Missing params to run query, specify it in the query params or use an export directive',
       );
     }
     let { method, type } = directives.rest;
@@ -207,7 +219,12 @@ export class RestLink extends ApolloLink {
           resolver,
           queryWithTypename,
           null,
-          { headers, endpoints: this.endpoints, credentials },
+          {
+            headers,
+            endpoints: this.endpoints,
+            export: exportVariables,
+            credentials,
+          },
           variables,
           resolverOptions,
         );
