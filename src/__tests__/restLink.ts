@@ -16,19 +16,21 @@ const sampleQuery = gql`
   }
 `;
 
+type Result = { [index: string]: any };
+
 describe('Configuration', () => {
   describe('Errors', () => {
     it('throws without any config', () => {
       expect.assertions(3);
 
       expect(() => {
-        new RestLink();
+        new RestLink(undefined);
       }).toThrow();
       expect(() => {
-        new RestLink({});
+        new RestLink({} as any);
       }).toThrow();
       expect(() => {
-        new RestLink({ bogus: '' });
+        new RestLink({ bogus: '' } as any);
       }).toThrow();
     });
 
@@ -82,7 +84,7 @@ describe('Configuration', () => {
         }
       `;
 
-      const { data } = await makePromise(
+      const { data } = await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postAndTags,
@@ -151,7 +153,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -177,7 +179,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -203,7 +205,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'tags',
         query: tagsQuery,
@@ -238,7 +240,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postWithContent',
         query: postTitleQuery,
@@ -264,7 +266,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -291,7 +293,7 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -329,14 +331,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data: data1 } = await makePromise(
+    const { data: data1 } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle1',
         query: postTitleQuery1,
         variables: { id: '1' },
       }),
     );
-    const { data: data2 } = await makePromise(
+    const { data: data2 } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle2',
         query: postTitleQuery2,
@@ -378,7 +380,7 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postAndTags',
         query: postAndTags,
@@ -413,7 +415,7 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postAndTags',
         query: postAndTags,
@@ -449,7 +451,7 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQueries,
@@ -477,7 +479,7 @@ describe('Query options', () => {
       const post = { id: '1', Title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'post',
           query: sampleQuery,
@@ -510,7 +512,7 @@ describe('Query options', () => {
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'post',
           query: sampleQuery,
@@ -543,7 +545,7 @@ describe('Query options', () => {
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'post',
           query: sampleQuery,
@@ -572,7 +574,7 @@ describe('Query options', () => {
         }
       `;
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitleQuery,
@@ -603,7 +605,7 @@ describe('Query options', () => {
         }
       `;
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitleQuery,
@@ -635,7 +637,7 @@ describe('Query options', () => {
       `;
 
       try {
-        await makePromise(
+        await makePromise<Result>(
           execute(link, {
             operationName: 'postTitle',
             query: postTitleQuery,
@@ -682,7 +684,7 @@ describe('Query options', () => {
         }
       `;
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitleQuery,
@@ -717,7 +719,7 @@ describe('Query options', () => {
         }
       `;
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitleQuery,
@@ -764,7 +766,7 @@ describe('Query options', () => {
         }
       `;
 
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitleQuery,
@@ -785,21 +787,11 @@ describe('Query options', () => {
 });
 
 describe('validateRequestMethodForOperationType', () => {
-  const createRequestParams = (params = {}) => ({
-    name: 'post',
-    filteredKeys: [],
-    endpoint: `/api/post/1`,
-    method: 'POST',
-    ...params,
-  });
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'mutation',
-        ),
+        validateRequestMethodForOperationType('GET', 'mutation'),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
   });
@@ -807,10 +799,7 @@ describe('validateRequestMethodForOperationType', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType(
-          [createRequestParams()],
-          'subscription',
-        ),
+        validateRequestMethodForOperationType('GET', 'subscription'),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
@@ -857,7 +846,7 @@ describe('export directive', () => {
     `;
 
     try {
-      await makePromise(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTagWithoutExport,
@@ -931,7 +920,7 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTagExport,
@@ -971,7 +960,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data } = await client.query({
+    const { data }: { data: any } = await client.query({
       query: postTagExport,
     });
 

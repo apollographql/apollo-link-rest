@@ -9,27 +9,79 @@ import {
 import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
 import { graphql } from 'graphql-anywhere/lib/async';
 
-export type RestLinkOptions = {
-  uri: string;
-  endpoints?: {
-    [endpointKey: string]: string;
-  };
-  headers?: {
-    [headerKey: string]: string;
-  };
-  fieldNameNormalizer?: Function;
-  customFetch?: Function;
-  credentials?: string;
-};
+export namespace RestLink {
+  export type URI = string;
 
-const addTypeNameToResult = (result, __typename) => {
+  export type Endpoint = string;
+  export interface Endpoints {
+    [endpointKey: string]: Endpoint;
+  }
+
+  export type Header = string;
+  export interface Headers {
+    [headerKey: string]: Header;
+  }
+
+  export interface FieldNameNormalizer {
+    (fieldName: string): string;
+  }
+
+  export type CustomFetch = (
+    request: RequestInfo,
+    init: RequestInit,
+  ) => Promise<Response>;
+
+  export type Credentials = string;
+
+  export type Options = {
+    /**
+     * The URI to use when fetching operations.
+     *
+     * Optional if endpoints provides a default.
+     */
+    uri?: URI;
+
+    /**
+     * A root endpoint (uri) to apply paths to or a map of endpoints.
+     */
+    endpoints?: Endpoints;
+
+    /**
+     * An object representing values to be sent as headers on the request.
+     */
+    headers?: Headers;
+
+    /**
+     * A function that takes the response field name and converts it into a GraphQL compliant name
+     */
+    fieldNameNormalizer?: FieldNameNormalizer;
+
+    /**
+     * The credentials policy you want to use for the fetch call.
+     */
+    credentials?: Credentials;
+
+    /**
+     * Use a custom fetch to handle REST calls.
+     */
+    customFetch?: CustomFetch;
+  };
+}
+
+const addTypeNameToResult = (
+  result: any[] | object,
+  __typename: string,
+): any[] | object => {
   if (Array.isArray(result)) {
     return result.map(e => ({ ...e, __typename }));
   }
   return { ...result, __typename };
 };
 
-const getURIFromEndpoints = (endpoints, endpoint) => {
+const getURIFromEndpoints = (
+  endpoints: RestLink.Endpoints,
+  endpoint: RestLink.Endpoint,
+): RestLink.URI => {
   return (
     endpoints[endpoint || DEFAULT_ENDPOINT_KEY] ||
     endpoints[DEFAULT_ENDPOINT_KEY]
@@ -60,7 +112,7 @@ const convertObjectKeys = (object, converter) => {
 };
 
 export const validateRequestMethodForOperationType = (
-  method: String,
+  method: string,
   operationType: OperationTypeNode,
 ) => {
   /**
@@ -137,15 +189,14 @@ const DEFAULT_ENDPOINT_KEY = '';
 
 /**
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
- * - @param: uri: default URI, optional if endpoints provides a default.
- * - @param: endpoints: optional map of potential API endpoints this RestLink will hit.
  */
 export class RestLink extends ApolloLink {
-  private endpoints: { [endpointKey: string]: string };
-  private headers: { [headerKey: string]: string };
-  private fieldNameNormalizer: Function;
-  private customFetch: Function;
-  private credentials: string;
+  private endpoints: RestLink.Endpoints;
+  private headers: RestLink.Headers;
+  private fieldNameNormalizer: RestLink.FieldNameNormalizer;
+  private credentials: RestLink.Credentials;
+  private customFetch: RestLink.CustomFetch;
+
   constructor({
     uri,
     endpoints,
@@ -153,7 +204,7 @@ export class RestLink extends ApolloLink {
     fieldNameNormalizer,
     customFetch,
     credentials,
-  }: RestLinkOptions) {
+  }: RestLink.Options) {
     super();
     const fallback = {};
     fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
@@ -200,12 +251,13 @@ export class RestLink extends ApolloLink {
       return forward(operation);
     }
 
-    const headers = {
+    const headers: RestLink.Headers = {
       ...this.headers,
       ...contextHeaders,
     };
 
-    const credentials = contextCredentials || this.credentials;
+    const credentials: RestLink.Credentials =
+      contextCredentials || this.credentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 

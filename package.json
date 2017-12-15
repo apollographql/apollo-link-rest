@@ -34,7 +34,9 @@
     "prepublishOnly": "npm run clean && npm run build",
     "test": "jest",
     "coverage": "npm run lint && jest --coverage",
-    "watch": "tsc -w -p ."
+    "watch": "tsc -w -p .",
+    "check-types":
+      "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
   },
   "dependencies": {
     "apollo-link": "^1.0.3",
