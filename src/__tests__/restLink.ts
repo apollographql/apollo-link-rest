@@ -960,7 +960,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data } = await client.query({
+    const { data }: { data: any } = await client.query({
       query: postTagExport,
     });
 
