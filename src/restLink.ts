@@ -26,6 +26,11 @@ export namespace RestLink {
     (fieldName: string): string;
   }
 
+  export type CustomFetch = (
+    request: RequestInfo,
+    init: RequestInit,
+  ) => Promise<Response>;
+
   export type Credentials = string;
 
   export type Options = {
@@ -55,6 +60,11 @@ export namespace RestLink {
      * The credentials policy you want to use for the fetch call.
      */
     credentials?: Credentials;
+
+    /**
+     * Use a custom fetch to handle REST calls.
+     */
+    customFetch?: CustomFetch;
   };
 }
 
@@ -127,20 +137,32 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
+let exportVariables = {};
+
 const resolver = async (fieldName, root, args, context, info) => {
   const { directives, isLeaf, resultKey } = info;
-  if (isLeaf) {
-    return root[resultKey];
+  if (root === null) {
+    exportVariables = {};
   }
-  const { credentials, endpoints, headers } = context;
+  if (isLeaf) {
+    const leafValue = root[resultKey];
+    if (directives && directives.export) {
+      exportVariables[directives.export.as] = leafValue;
+    }
+    return leafValue;
+  }
+  const { credentials, endpoints, headers, customFetch } = context;
   const { path, endpoint } = directives.rest;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
-    let pathWithParams = path;
-    if (args) {
-      pathWithParams = Object.keys(args).reduce(
-        (acc, e) => replaceParam(acc, e, args[e]),
-        path,
+    const argsWithExport = { ...args, ...exportVariables };
+    let pathWithParams = Object.keys(argsWithExport).reduce(
+      (acc, e) => replaceParam(acc, e, argsWithExport[e]),
+      path,
+    );
+    if (pathWithParams.includes(':')) {
+      throw new Error(
+        'Missing params to run query, specify it in the query params or use an export directive',
       );
     }
     let { method, type } = directives.rest;
@@ -148,7 +170,7 @@ const resolver = async (fieldName, root, args, context, info) => {
       method = 'GET';
     }
     validateRequestMethodForOperationType(method, 'query');
-    return await fetch(`${uri}${pathWithParams}`, {
+    return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
       headers,
@@ -173,12 +195,14 @@ export class RestLink extends ApolloLink {
   private headers: RestLink.Headers;
   private fieldNameNormalizer: RestLink.FieldNameNormalizer;
   private credentials: RestLink.Credentials;
+  private customFetch: RestLink.CustomFetch;
 
   constructor({
     uri,
     endpoints,
     headers,
     fieldNameNormalizer,
+    customFetch,
     credentials,
   }: RestLink.Options) {
     super();
@@ -210,6 +234,7 @@ export class RestLink extends ApolloLink {
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.headers = headers || {};
     this.credentials = credentials || null;
+    this.customFetch = customFetch;
   }
 
   public request(
@@ -245,20 +270,27 @@ export class RestLink extends ApolloLink {
     }
 
     return new Observable(observer => {
-      try {
-        const result = graphql(
-          resolver,
-          queryWithTypename,
-          null,
-          { headers, endpoints: this.endpoints, credentials },
-          variables,
-          resolverOptions,
-        );
-        observer.next(result);
-        observer.complete();
-      } catch (err) {
-        observer.error.bind(observer);
-      }
+      graphql(
+        resolver,
+        queryWithTypename,
+        null,
+        {
+          headers,
+          endpoints: this.endpoints,
+          export: exportVariables,
+          credentials,
+          customFetch: this.customFetch,
+        },
+        variables,
+        resolverOptions,
+      )
+        .then(data => {
+          observer.next({ data });
+          observer.complete();
+        })
+        .catch(err => {
+          observer.error(err);
+        });
     });
   }
 }
