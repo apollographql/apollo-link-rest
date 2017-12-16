@@ -115,10 +115,6 @@ export const validateRequestMethodForOperationType = (
   method: string,
   operationType: OperationTypeNode,
 ) => {
-  /**
-   * NOTE: possible improvements
-   * - use typed errors (e.g. ValidationError, MethodNotSupportedError)
-   */
   switch (operationType) {
     case 'query':
       if (method.toUpperCase() !== 'GET') {
@@ -132,8 +128,8 @@ export const validateRequestMethodForOperationType = (
     case 'subscription':
       throw new Error('A "subscription" operation is not supported yet.');
     default:
-      // ignore
-      return;
+      const _exhaustiveCheck: never = operationType;
+      return _exhaustiveCheck;
   }
 };
 
