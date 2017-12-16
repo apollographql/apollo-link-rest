@@ -619,7 +619,7 @@ describe('Query options', () => {
       );
     });
 
-    it('throws if method is not GET', async () => {
+    it('throws if query method is not GET', async () => {
       expect.assertions(2);
 
       const link = new RestLink({ uri: '/api' });
@@ -789,9 +789,21 @@ describe('Query options', () => {
 describe('validateRequestMethodForOperationType', () => {
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
-      expect.assertions(1);
+      expect.assertions(5);
       expect(() =>
         validateRequestMethodForOperationType('GET', 'mutation'),
+      ).toThrowError('A "mutation" operation is not supported yet.');
+      expect(() =>
+        validateRequestMethodForOperationType('POST', 'mutation'),
+      ).toThrowError('A "mutation" operation is not supported yet.');
+      expect(() =>
+        validateRequestMethodForOperationType('PUT', 'mutation'),
+      ).toThrowError('A "mutation" operation is not supported yet.');
+      expect(() =>
+        validateRequestMethodForOperationType('PATCH', 'mutation'),
+      ).toThrowError('A "mutation" operation is not supported yet.');
+      expect(() =>
+        validateRequestMethodForOperationType('DELETE', 'mutation'),
       ).toThrowError('A "mutation" operation is not supported yet.');
     });
   });
@@ -800,22 +812,6 @@ describe('validateRequestMethodForOperationType', () => {
       expect.assertions(1);
       expect(() =>
         validateRequestMethodForOperationType('GET', 'subscription'),
-      ).toThrowError('A "subscription" operation is not supported yet.');
-    });
-  });
-  describe('for operation type "mutation"', () => {
-    it('throws because it is not supported yet', () => {
-      expect.assertions(1);
-      expect(() =>
-        validateRequestMethodForOperationType('POST', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
-    });
-  });
-  describe('for operation type "subscription"', () => {
-    it('throws because it is not supported yet', () => {
-      expect.assertions(1);
-      expect(() =>
-        validateRequestMethodForOperationType('POST', 'subscription'),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
