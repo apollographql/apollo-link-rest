@@ -78,6 +78,24 @@ export namespace RestLink {
      */
     customFetch?: CustomFetch;
   };
+
+  /** @rest(...) Directive Options */
+  export interface DirectiveOptions {
+    /**
+     * What HTTP method to use.
+     * @default `GET`
+     */
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+    /** What GraphQL type to name the response */
+    type?: string;
+    /** What path to use */
+    path: string;
+    /**
+     * What endpoint to select from the map of endpoints available to this link.
+     * @default `RestLink.endpoints[DEFAULT_ENDPOINT_KEY]`
+     */
+    endpoint?: string;
+  }
 }
 
 const addTypeNameToResult = (
@@ -282,7 +300,6 @@ const resolver: Resolver = async (
     }
     return leafValue;
   }
-  const { path, endpoint } = directives.rest;
   const {
     credentials,
     endpoints,
@@ -290,6 +307,7 @@ const resolver: Resolver = async (
     customFetch,
     operationType,
   } = context;
+  const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
     const argsWithExport = { ...args, ...exportVariables };
@@ -302,7 +320,7 @@ const resolver: Resolver = async (
         'Missing params to run query, specify it in the query params or use an export directive',
       );
     }
-    let { method, type } = directives.rest;
+    let { method, type } = directives.rest as RestLink.DirectiveOptions;
     if (!method) {
       method = 'GET';
     }
