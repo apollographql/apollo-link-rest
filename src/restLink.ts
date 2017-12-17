@@ -8,6 +8,7 @@ import {
 } from 'apollo-link';
 import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
 import { graphql } from 'graphql-anywhere/lib/async';
+import { Resolver } from 'graphql-anywhere';
 
 export namespace RestLink {
   export type URI = string;
@@ -88,14 +89,21 @@ const getURIFromEndpoints = (
   );
 };
 
-const replaceParam = (endpoint, name, value) => {
+const replaceParam = (
+  endpoint: string,
+  name: string,
+  value: string,
+): string => {
   if (!value || !name) {
     return endpoint;
   }
   return endpoint.replace(`:${name}`, value);
 };
 
-const convertObjectKeys = (object, converter) => {
+const convertObjectKeys = (
+  object: object,
+  converter: (value: string) => string,
+): object => {
   return Object.keys(object)
     .filter(e => e !== '__typename')
     .reduce((acc, val) => {
@@ -114,11 +122,7 @@ const convertObjectKeys = (object, converter) => {
 export const validateRequestMethodForOperationType = (
   method: string,
   operationType: OperationTypeNode,
-) => {
-  /**
-   * NOTE: possible improvements
-   * - use typed errors (e.g. ValidationError, MethodNotSupportedError)
-   */
+): void => {
   switch (operationType) {
     case 'query':
       if (method.toUpperCase() !== 'GET') {
@@ -132,14 +136,14 @@ export const validateRequestMethodForOperationType = (
     case 'subscription':
       throw new Error('A "subscription" operation is not supported yet.');
     default:
-      // ignore
-      return;
+      const _exhaustiveCheck: never = operationType;
+      return _exhaustiveCheck;
   }
 };
 
 let exportVariables = {};
 
-const resolver = async (fieldName, root, args, context, info) => {
+const resolver: Resolver = async (fieldName, root, args, context, info) => {
   const { directives, isLeaf, resultKey } = info;
   if (root === null) {
     exportVariables = {};
