@@ -1,21 +1,37 @@
 import React, { Component } from 'react';
-import logo from './logo.svg';
+import { ApolloClient } from 'apollo-client';
+import { InMemoryCache } from 'apollo-cache-inmemory';
+import { ApolloProvider } from 'react-apollo';
+import { RestLink } from 'apollo-link-rest';
+import Person from './Person';
 import './App.css';
+
+const restLink = new RestLink({
+  uri: 'https://swapi.co/api/',
+});
+
+const client = new ApolloClient({
+  link: restLink,
+  cache: new InMemoryCache(),
+});
 
 class App extends Component {
   render() {
     return (
       <div className="App">
         <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <h1 className="App-title">Welcome to React</h1>
+          <h1 className="App-title">Welcome to Apollo Rest Link Example</h1>
         </header>
-        <p className="App-intro">
-          To get started, edit <code>src/App.js</code> and save to reload.
-        </p>
+        <Person />
       </div>
     );
   }
 }
 
-export default App;
+const ApolloApp = () => (
+  <ApolloProvider client={client}>
+    <App />
+  </ApolloProvider>
+);
+
+export default ApolloApp;
