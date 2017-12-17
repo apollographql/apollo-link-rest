@@ -30,9 +30,15 @@ export namespace RestLink {
 
   export type HeadersMergePolicy = (...headerGroups: Headers[]) => Headers;
 
-  export interface FieldNameNormalizer {
+  export interface SimpleFieldNameNormalizer {
     (fieldName: string): string;
   }
+  export interface KeyedFieldNameNormalizer {
+    (fieldName: string, keypath: string[]): string;
+  }
+  export type FieldNameNormalizer =
+    | SimpleFieldNameNormalizer
+    | KeyedFieldNameNormalizer;
 
   export type CustomFetch = (
     request: RequestInfo,
@@ -105,23 +111,34 @@ const replaceParam = (
   return endpoint.replace(`:${name}`, value);
 };
 
+/** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
-  converter: (value: string) => string,
+  converter: RestLink.FieldNameNormalizer,
+  keypath: string[] = [],
 ): object => {
   return Object.keys(object)
     .filter(e => e !== '__typename')
-    .reduce((acc, val) => {
-      let value = object[val];
+    .reduce((acc, key) => {
+      let value = object[key];
+      const nestedKeyPath = keypath.concat([key]);
       if (typeof value === 'object') {
-        value = convertObjectKeys(value, converter);
+        value = convertObjectKeys(value, converter, nestedKeyPath);
       }
       if (Array.isArray(value)) {
-        value = value.map(e => convertObjectKeys(e, converter));
+        value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
       }
-      acc[converter(val)] = value;
+      acc[
+        (converter as RestLink.KeyedFieldNameNormalizer)(key, nestedKeyPath)
+      ] = value;
       return acc;
     }, {});
+};
+
+const noOpNameNormalizer: RestLink.SimpleFieldNameNormalizer = (
+  name: string,
+) => {
+  return name;
 };
 
 /**
