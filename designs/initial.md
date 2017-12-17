@@ -47,8 +47,8 @@ const QUERY = gql`
 - `fetch`: an optional implementation of `fetch` (see the http-link for api / warnings). Will use global if found
 - `fieldNameNormalizer`: a function that takes the response field name and turns into a GraphQL compliant name,for instance "MyFieldName:IsGreat" => myFieldNameIsGreat
 - `endpoint`: a root endpoint (uri) to apply paths to: i.e. http[s]://api.example.com/v1 or a map of endpoints with a key to choose in the directive
-- `batch`: a boolean to batch possible calls together (not inital version requirement!)
-- `headers`: an object representing values to be sent as headers on the request
+- `batch`: a boolean to batch possible calls together (not initial version requirement!)
+- `headers`: an object representing values to be sent as headers on each request
 - `credentials`: a string representing the credentials policy you want for the fetch call
 - `fetchOptions`: any overrides of the fetch options argument to pass to the fetch call
 

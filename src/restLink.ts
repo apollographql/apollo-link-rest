@@ -6,7 +6,11 @@ import {
   NextLink,
   FetchResult,
 } from 'apollo-link';
-import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
+import {
+  hasDirectives,
+  getMainDefinition,
+  addTypenameToDocument,
+} from 'apollo-utilities';
 import { graphql } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
 
@@ -19,9 +23,12 @@ export namespace RestLink {
   }
 
   export type Header = string;
-  export interface Headers {
+  export interface HeadersHash {
     [headerKey: string]: Header;
   }
+  export type InitializationHeaders = HeadersHash | Headers | string[][];
+
+  export type HeadersMergePolicy = (...headerGroups: Headers[]) => Headers;
 
   export interface FieldNameNormalizer {
     (fieldName: string): string;
@@ -31,8 +38,6 @@ export namespace RestLink {
     request: RequestInfo,
     init: RequestInit,
   ) => Promise<Response>;
-
-  export type Credentials = string;
 
   export type Options = {
     /**
@@ -50,7 +55,7 @@ export namespace RestLink {
     /**
      * An object representing values to be sent as headers on the request.
      */
-    headers?: Headers;
+    headers?: InitializationHeaders;
 
     /**
      * A function that takes the response field name and converts it into a GraphQL compliant name
@@ -60,7 +65,7 @@ export namespace RestLink {
     /**
      * The credentials policy you want to use for the fetch call.
      */
-    credentials?: Credentials;
+    credentials?: RequestCredentials;
 
     /**
      * Use a custom fetch to handle REST calls.
@@ -119,6 +124,72 @@ const convertObjectKeys = (
     }, {});
 };
 
+/**
+ * Helper that makes sure our headers are of the right type to pass to Fetch
+ */
+export const normalizeHeaders = (
+  headers: RestLink.InitializationHeaders,
+): Headers => {
+  // Make sure that our headers object is of the right type
+  if (headers instanceof Headers) {
+    return headers;
+  } else {
+    return new Headers(headers);
+  }
+};
+
+/**
+ * Returns a new Headers Group that contains all the headers.
+ * - If there are duplicates, they will be in the returned header set multiple times!
+ */
+export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
+  ...headerGroups: Headers[]
+): Headers => {
+  return headerGroups.reduce((accumulator, current) => {
+    if (!current) {
+      return accumulator;
+    }
+    if (!current.forEach) {
+      current = normalizeHeaders(current);
+    }
+    current.forEach((value, key) => {
+      accumulator.append(key, value);
+    });
+
+    return accumulator;
+  }, new Headers());
+};
+
+/**
+ * This merge policy deletes any matching headers from the link's default headers.
+ * - Pass headersToOverride array & a headers arg to context and this policy will automatically be selected.
+ */
+export const overrideHeadersMergePolicyHelper = (
+  linkHeaders: Headers,
+  headersToOverride: string[],
+  requestHeaders: Headers | null,
+): Headers => {
+  const result = new Headers();
+  linkHeaders.forEach((value, key) => {
+    if (headersToOverride.indexOf(key) !== -1) {
+      return;
+    }
+    result.append(key, value);
+  });
+  return concatHeadersMergePolicy(result, requestHeaders || new Headers());
+};
+const makeOverrideHeadersMergePolicy = (
+  headersToOverride: string[],
+): RestLink.HeadersMergePolicy => {
+  return (linkHeaders, requestHeaders) => {
+    return overrideHeadersMergePolicyHelper(
+      linkHeaders,
+      headersToOverride,
+      requestHeaders,
+    );
+  };
+};
+
 export const validateRequestMethodForOperationType = (
   method: string,
   operationType: OperationTypeNode,
@@ -143,7 +214,40 @@ export const validateRequestMethodForOperationType = (
 
 let exportVariables = {};
 
-const resolver: Resolver = async (fieldName, root, args, context, info) => {
+/** Apollo-Link getContext, provided from the user & mutated by upstream links */
+interface LinkChainContext {
+  /** Credentials Policy for Fetch */
+  credentials?: RequestCredentials | null;
+
+  /** Headers the user wants to set on this request. See also headersMergePolicy */
+  headers?: RestLink.InitializationHeaders | null;
+
+  /** Will default to concatHeadersMergePolicy unless headersToOverride is set */
+  headersMergePolicy?: RestLink.HeadersMergePolicy | null;
+
+  /** List of headers to override, passing this will swap headersMergePolicy if necessary */
+  headersToOverride?: string[] | null;
+}
+
+/** Context passed via graphql() to our resolver */
+interface RequestContext {
+  /** Headers the user wants to set on this request. See also headersMergePolicy */
+  headers: Headers;
+
+  /** Credentials Policy for Fetch */
+  credentials?: RequestCredentials | null;
+
+  endpoints: RestLink.Endpoints;
+  customFetch: RestLink.CustomFetch;
+}
+
+const resolver: Resolver = async (
+  fieldName: string,
+  root: any,
+  args: any,
+  context: RequestContext,
+  info: any,
+) => {
   const { directives, isLeaf, resultKey } = info;
   if (root === null) {
     exportVariables = {};
@@ -196,9 +300,9 @@ const DEFAULT_ENDPOINT_KEY = '';
  */
 export class RestLink extends ApolloLink {
   private endpoints: RestLink.Endpoints;
-  private headers: RestLink.Headers;
+  private headers: Headers;
   private fieldNameNormalizer: RestLink.FieldNameNormalizer;
-  private credentials: RestLink.Credentials;
+  private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
 
   constructor({
@@ -236,7 +340,7 @@ export class RestLink extends ApolloLink {
     }
 
     this.fieldNameNormalizer = fieldNameNormalizer || null;
-    this.headers = headers || {};
+    this.headers = normalizeHeaders(headers);
     this.credentials = credentials || null;
     this.customFetch = customFetch;
   }
@@ -246,30 +350,41 @@ export class RestLink extends ApolloLink {
     forward?: NextLink,
   ): Observable<FetchResult> | null {
     const { query, variables, getContext } = operation;
-    const {
-      headers: contextHeaders = {},
-      credentials: contextCredentials,
-    } = getContext();
+    const context: LinkChainContext | any = getContext() as any;
     const isRestQuery = hasDirectives(['rest'], operation.query);
     if (!isRestQuery) {
       return forward(operation);
     }
 
-    const headers: RestLink.Headers = {
-      ...this.headers,
-      ...contextHeaders,
-    };
+    // 1. Use the user's merge policy if any
+    let headersMergePolicy: RestLink.HeadersMergePolicy =
+      context.headersMergePolicy;
+    if (
+      headersMergePolicy == null &&
+      Array.isArray(context.headersToOverride)
+    ) {
+      // 2.a. Override just the passed in headers, if user provided that optional array
+      headersMergePolicy = makeOverrideHeadersMergePolicy(
+        context.headersToOverride,
+      );
+    } else if (headersMergePolicy == null) {
+      // 2.b Glue the link (default) headers to the request-context headers
+      headersMergePolicy = concatHeadersMergePolicy;
+    }
 
-    const credentials: RestLink.Credentials =
-      contextCredentials || this.credentials;
+    const headers = headersMergePolicy(this.headers, context.headers);
+
+    const credentials: RequestCredentials =
+      context.credentials || this.credentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 
-    let resolverOptions = {};
+    let resolverOptions: {
+      resultMapper?: (fields: any) => any;
+    } = {};
     if (this.fieldNameNormalizer) {
-      resolverOptions = {
-        resultMapper: resultFields =>
-          convertObjectKeys(resultFields, this.fieldNameNormalizer),
+      resolverOptions.resultMapper = resultFields => {
+        return convertObjectKeys(resultFields, this.fieldNameNormalizer);
       };
     }
 
