@@ -11,7 +11,7 @@ import {
   getMainDefinition,
   addTypenameToDocument,
 } from 'apollo-utilities';
-import { graphql } from 'graphql-anywhere/lib/async';
+import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
 
 export namespace RestLink {
@@ -246,7 +246,7 @@ const resolver: Resolver = async (
   root: any,
   args: any,
   context: RequestContext,
-  info: any,
+  info: ExecInfo,
 ) => {
   const { directives, isLeaf, resultKey } = info;
   if (root === null) {
