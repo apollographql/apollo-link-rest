@@ -6,7 +6,10 @@ import * as camelCase from 'camelcase';
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
-import { validateRequestMethodForOperationType } from '../restLink';
+import {
+  validateRequestMethodForOperationType,
+  normalizeHeaders,
+} from '../restLink';
 
 const sampleQuery = gql`
   query post {
@@ -473,7 +476,10 @@ describe('Query options', () => {
       expect.assertions(1);
       const link = new RestLink({
         uri: '/api',
-        credentials: 'my-credentials',
+        // Casting to RequestCredentials for testing purposes,
+        // the only valid values here defined by RequestCredentials from Fetch
+        // and typescript will yell at you for violating this!
+        credentials: 'my-credentials' as RequestCredentials,
       });
 
       const post = { id: '1', Title: 'Love apollo' };
@@ -539,7 +545,10 @@ describe('Query options', () => {
 
       const link = ApolloLink.from([
         credentialsMiddleware,
-        new RestLink({ uri: '/api', credentials: 'wrong-credentials' }),
+        new RestLink({
+          uri: '/api',
+          credentials: 'wrong-credentials' as RequestCredentials,
+        }),
       ]);
 
       const post = { id: '1', title: 'Love apollo' };
@@ -653,6 +662,29 @@ describe('Query options', () => {
       expect(fetchMock.called('/api/post/1')).toBe(false);
     });
   });
+
+  /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
+  const flattenHeaders: ({ headers: Headers }) => { [key: string]: string } = ({
+    headers,
+  }) => {
+    const headersFlattened: { [key: string]: string } = {};
+    headers.forEach((value, key) => {
+      headersFlattened[key] = value;
+    });
+    return headersFlattened;
+  };
+
+  /** Helper that flattens headers & preserves duplicate objects */
+  const orderDupPreservingFlattenedHeaders: (
+    { headers: Headers },
+  ) => string[] = ({ headers }) => {
+    const orderedFlattened = [];
+    headers.forEach((value, key) => {
+      orderedFlattened.push(`${key}: ${value}`);
+    });
+    return orderedFlattened;
+  };
+
   describe('headers', () => {
     it('adds headers to the request from the context', async () => {
       expect.assertions(2);
@@ -693,13 +725,9 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            authorization: '1234',
-          }),
-        }),
-      );
+      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'authorization: 1234',
+      ]);
     });
     it('adds headers to the request from the setup', async () => {
       const link = new RestLink({
@@ -728,7 +756,7 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
+      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             authorization: '1234',
@@ -741,7 +769,13 @@ describe('Query options', () => {
 
       const headersMiddleware = new ApolloLink((operation, forward) => {
         operation.setContext({
-          headers: { authorization: '1234' },
+          headers: {
+            authorization: '1234',
+            // won't be overridden, will be duplicated because of headersToOverride
+            setup: 'in-context duplicate setup',
+            context: 'context',
+          },
+          headersToOverride: ['authorization'],
         });
         return forward(operation).map(result => {
           const { headers } = operation.getContext();
@@ -751,7 +785,10 @@ describe('Query options', () => {
       });
       const link = ApolloLink.from([
         headersMiddleware,
-        new RestLink({ uri: '/api', headers: { authorization: 'no user' } }),
+        new RestLink({
+          uri: '/api',
+          headers: { authorization: 'no user', setup: 'setup' },
+        }),
       ]);
 
       const post = { id: '1', title: 'Love apollo' };
@@ -775,13 +812,130 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
+      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'setup: setup',
+        'setup: in-context duplicate setup',
+        'authorization: 1234',
+        'context: context',
+      ]);
+    });
+    it('respects context-provided header-merge policy', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        /** This Merge Policy preserves the setup headers over the context headers */
+        const headersMergePolicy: RestLink.HeadersMergePolicy = (
+          ...headerGroups: Headers[]
+        ) => {
+          return headerGroups.reduce((accumulator, current) => {
+            normalizeHeaders(current).forEach((value, key) => {
+              if (!accumulator.has(key)) {
+                accumulator.append(key, value);
+              }
+            });
+            return accumulator;
+          }, new Headers());
+        };
+        operation.setContext({
+          headers: { authorization: 'context', context: 'context' },
+          headersMergePolicy,
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({
+          uri: '/api',
+          headers: { authorization: 'initial setup', setup: 'setup' },
+        }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
-            authorization: '1234',
+            authorization: 'initial setup',
+            setup: 'setup',
+            context: 'context',
           }),
         }),
       );
+    });
+    it('preserves duplicative headers in their correct order', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          headers: { authorization: 'context' },
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({
+          uri: '/api',
+          headers: { authorization: 'initial setup' },
+        }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      const { headers } = requestCall[1];
+      const orderedFlattened = [];
+      headers.forEach((value, key) => {
+        orderedFlattened.push(`${key}: ${value}`);
+      });
+      expect(orderedFlattened).toEqual([
+        'authorization: initial setup',
+        'authorization: context',
+      ]);
     });
   });
 });
