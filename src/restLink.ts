@@ -6,11 +6,7 @@ import {
   NextLink,
   FetchResult,
 } from 'apollo-link';
-import {
-  hasDirectives,
-  getMainDefinition,
-  addTypenameToDocument,
-} from 'apollo-utilities';
+import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
 

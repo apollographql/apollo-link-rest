@@ -927,7 +927,7 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      const { headers, ...otherContext } = requestCall[1];
+      const { headers } = requestCall[1];
       const orderedFlattened = [];
       headers.forEach((value, key) => {
         orderedFlattened.push(`${key}: ${value}`);
