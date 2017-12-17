@@ -69,6 +69,12 @@ export namespace RestLink {
     fieldNameNormalizer?: FieldNameNormalizer;
 
     /**
+     * A function that takes a GraphQL-compliant field name and converts it back into an endpoint-specific name
+     * Can be overridden at the mutation-call-site (in the rest-directive).
+     */
+    fieldNameDenormalizer?: FieldNameNormalizer;
+
+    /**
      * The credentials policy you want to use for the fetch call.
      */
     credentials?: RequestCredentials;
@@ -95,6 +101,24 @@ export namespace RestLink {
      * @default `RestLink.endpoints[DEFAULT_ENDPOINT_KEY]`
      */
     endpoint?: string;
+    /**
+     * Optional method that constructs a RequestBody out of the Environmental state
+     * when processing this @rest(...) call. 
+     * @default function that extracts the bodyKey from the args.
+     */
+    bodyBuilder?: (args: object) => object;
+    /**
+     * Optional field that defines the name of the env var to extract and use as the body
+     * @default "input"
+     * @see https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
+     */
+    bodyKey?: string;
+    /**
+     * A per-request name denormalizer, this permits special endpoints to have their
+     * field names remapped differently from the default.
+     * @default Uses RestLink.fieldNameDenormalizer
+     */
+    fieldNameDenormalizer?: RestLink.FieldNameNormalizer;
   }
 }
 
@@ -280,6 +304,7 @@ interface RequestContext {
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
+  fieldNameDenormalizer: RestLink.FieldNameNormalizer;
 }
 
 const resolver: Resolver = async (
@@ -306,6 +331,7 @@ const resolver: Resolver = async (
     headers,
     customFetch,
     operationType,
+    fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
   const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
   const uri = getURIFromEndpoints(endpoints, endpoint);
@@ -320,15 +346,53 @@ const resolver: Resolver = async (
         'Missing params to run query, specify it in the query params or use an export directive',
       );
     }
-    let { method, type } = directives.rest as RestLink.DirectiveOptions;
+    let {
+      method,
+      type,
+      bodyBuilder,
+      bodyKey,
+      fieldNameDenormalizer: perRequestNameDenormalizer,
+    } = directives.rest as RestLink.DirectiveOptions;
     if (!method) {
       method = 'GET';
     }
+
+    let body = null;
+    if (
+      -1 === ['GET', 'DELETE'].indexOf(method) &&
+      operationType === 'mutation'
+    ) {
+      // Prepare our body!
+      if (!bodyBuilder) {
+        // By convention GraphQL recommends mutations having a single argument named "input"
+        // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
+
+        const maybeBody = argsWithExport[bodyKey || 'input'];
+        if (!maybeBody) {
+          throw new Error(
+            '[GraphQL mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
+          );
+        }
+
+        bodyBuilder = (argsWithExport: object) => {
+          return maybeBody;
+        };
+      }
+      body = convertObjectKeys(
+        bodyBuilder(argsWithExport),
+        perRequestNameDenormalizer ||
+          linkLevelNameDenormalizer ||
+          noOpNameNormalizer,
+      );
+    }
+
     validateRequestMethodForOperationType(method, operationType || 'query');
+
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
       headers,
+      body,
     })
       .then(res => res.json())
       .then(result => addTypeNameToResult(result, type));
@@ -349,6 +413,7 @@ export class RestLink extends ApolloLink {
   private endpoints: RestLink.Endpoints;
   private headers: Headers;
   private fieldNameNormalizer: RestLink.FieldNameNormalizer;
+  private fieldNameDenormalizer: RestLink.FieldNameNormalizer;
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
 
@@ -357,6 +422,7 @@ export class RestLink extends ApolloLink {
     endpoints,
     headers,
     fieldNameNormalizer,
+    fieldNameDenormalizer,
     customFetch,
     credentials,
   }: RestLink.Options) {
@@ -387,6 +453,7 @@ export class RestLink extends ApolloLink {
     }
 
     this.fieldNameNormalizer = fieldNameNormalizer || null;
+    this.fieldNameDenormalizer = fieldNameDenormalizer || null;
     this.headers = normalizeHeaders(headers);
     this.credentials = credentials || null;
     this.customFetch = customFetch;
@@ -450,6 +517,7 @@ export class RestLink extends ApolloLink {
           credentials,
           customFetch: this.customFetch,
           operationType,
+          fieldNameDenormalizer: this.fieldNameDenormalizer,
         },
         variables,
         resolverOptions,
