@@ -940,25 +940,52 @@ describe('Query options', () => {
   });
 });
 
+describe('Mutation', () => {
+  describe('basic support', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('supports POST requests', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        mutation publishPost($title: String) {
+          publishedPost(title: $title)
+            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publish',
+          query: createPostMutation,
+          variables: { title: post.title },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+    });
+  });
+});
+
 describe('validateRequestMethodForOperationType', () => {
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
-      expect.assertions(5);
+      expect.assertions(2);
       expect(() =>
         validateRequestMethodForOperationType('GET', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
+      ).toThrowError('"mutation" operations do not support that HTTP-verb');
       expect(() =>
-        validateRequestMethodForOperationType('POST', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
-      expect(() =>
-        validateRequestMethodForOperationType('PUT', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
-      expect(() =>
-        validateRequestMethodForOperationType('PATCH', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
-      expect(() =>
-        validateRequestMethodForOperationType('DELETE', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
+        validateRequestMethodForOperationType('GIBBERISH', 'mutation'),
+      ).toThrowError('"mutation" operations do not support that HTTP-verb');
     });
   });
   describe('for operation type "subscription"', () => {

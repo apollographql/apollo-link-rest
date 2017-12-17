@@ -6,7 +6,11 @@ import {
   NextLink,
   FetchResult,
 } from 'apollo-link';
-import { hasDirectives, addTypenameToDocument } from 'apollo-utilities';
+import {
+  hasDirectives,
+  getMainDefinition,
+  addTypenameToDocument,
+} from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
 
@@ -199,7 +203,12 @@ export const validateRequestMethodForOperationType = (
       }
       return;
     case 'mutation':
-      throw new Error('A "mutation" operation is not supported yet.');
+      if (
+        ['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(method.toUpperCase()) !== -1
+      ) {
+        return;
+      }
+      throw new Error('"mutation" operations do not support that HTTP-verb');
     case 'subscription':
       throw new Error('A "subscription" operation is not supported yet.');
     default:
@@ -235,6 +244,7 @@ interface RequestContext {
 
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
+  operationType: OperationTypeNode;
 }
 
 const resolver: Resolver = async (
@@ -255,8 +265,14 @@ const resolver: Resolver = async (
     }
     return leafValue;
   }
-  const { credentials, endpoints, headers, customFetch } = context;
   const { path, endpoint } = directives.rest;
+  const {
+    credentials,
+    endpoints,
+    headers,
+    customFetch,
+    operationType,
+  } = context;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
     const argsWithExport = { ...args, ...exportVariables };
@@ -273,7 +289,7 @@ const resolver: Resolver = async (
     if (!method) {
       method = 'GET';
     }
-    validateRequestMethodForOperationType(method, 'query');
+    validateRequestMethodForOperationType(method, operationType || 'query');
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
@@ -375,6 +391,9 @@ export class RestLink extends ApolloLink {
 
     const queryWithTypename = addTypenameToDocument(query);
 
+    const operationType: OperationTypeNode =
+      (getMainDefinition(query) || ({} as any)).operation || 'query';
+
     let resolverOptions: {
       resultMapper?: (fields: any) => any;
     } = {};
@@ -395,6 +414,7 @@ export class RestLink extends ApolloLink {
           export: exportVariables,
           credentials,
           customFetch: this.customFetch,
+          operationType,
         },
         variables,
         resolverOptions,
