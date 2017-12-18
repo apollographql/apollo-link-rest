@@ -153,12 +153,27 @@ const replaceParam = (
   return endpoint.replace(`:${name}`, value);
 };
 
+function isSimpleFieldNameNormalizer(
+  arg: Function,
+): arg is RestLink.SimpleFieldNameNormalizer {
+  return arg.prototype.arity != 2;
+}
+
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
   converter: RestLink.FieldNameNormalizer,
   keypath: string[] = [],
 ): object => {
+  let convert: RestLink.KeyedFieldNameNormalizer = null;
+  if (isSimpleFieldNameNormalizer(converter)) {
+    convert = (name, keypath) => {
+      return converter(name);
+    };
+  } else {
+    convert = converter;
+  }
+
   return Object.keys(object)
     .filter(e => e !== '__typename')
     .reduce((acc, key) => {
@@ -170,9 +185,7 @@ const convertObjectKeys = (
       if (Array.isArray(value)) {
         value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
       }
-      acc[
-        (converter as RestLink.KeyedFieldNameNormalizer)(key, nestedKeyPath)
-      ] = value;
+      acc[convert(key, nestedKeyPath)] = value;
       return acc;
     }, {});
 };
