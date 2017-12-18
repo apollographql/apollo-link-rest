@@ -30,15 +30,9 @@ export namespace RestLink {
 
   export type HeadersMergePolicy = (...headerGroups: Headers[]) => Headers;
 
-  export interface SimpleFieldNameNormalizer {
-    (fieldName: string): string;
+  export interface FieldNameNormalizer {
+    (fieldName: string, keypath?: string[]): string;
   }
-  export interface KeyedFieldNameNormalizer {
-    (fieldName: string, keypath: string[]): string;
-  }
-  export type FieldNameNormalizer =
-    | SimpleFieldNameNormalizer
-    | KeyedFieldNameNormalizer;
 
   export type CustomFetch = (
     request: RequestInfo,
@@ -153,20 +147,14 @@ const replaceParam = (
   return endpoint.replace(`:${name}`, value);
 };
 
-function isSimpleFieldNameNormalizer(
-  arg: Function,
-): arg is RestLink.SimpleFieldNameNormalizer {
-  return arg.prototype.arity != 2;
-}
-
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
   converter: RestLink.FieldNameNormalizer,
   keypath: string[] = [],
 ): object => {
-  let convert: RestLink.KeyedFieldNameNormalizer = null;
-  if (isSimpleFieldNameNormalizer(converter)) {
+  let convert: RestLink.FieldNameNormalizer = null;
+  if (converter.prototype.arity != 2) {
     convert = (name, keypath) => {
       return converter(name);
     };
@@ -195,9 +183,7 @@ const convertObjectKeys = (
     }, {});
 };
 
-const noOpNameNormalizer: RestLink.SimpleFieldNameNormalizer = (
-  name: string,
-) => {
+const noOpNameNormalizer: RestLink.FieldNameNormalizer = (name: string) => {
   return name;
 };
 
