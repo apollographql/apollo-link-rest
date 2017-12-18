@@ -3,6 +3,7 @@ import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
+import * as snake_case from 'snake-case';
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
@@ -1191,6 +1192,118 @@ describe('Mutation', () => {
       const requestCall = fetchMock.calls('/api/posts/1')[0];
       expect(requestCall[1]).toEqual(
         expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  describe('fieldNameDenormalizer', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('corrects names to snake-case for link-level denormalizer', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+        fieldNameDenormalizer: snake_case,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.post('/api/posts/new', { id: 1, ...snakePost });
+      const intermediatePost = snakePost;
+      const resultPost = { ...camelPost, id: 1 };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          titleString: String
+          categoryId: Number
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            id
+            titleString
+            categoryId
+            # Add Workaround Fields
+            title_string
+            category_id
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: camelPost },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining(intermediatePost),
+        }),
+      );
+    });
+    it('corrects names to snake-case for request-level denormalizer', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.post('/api/posts/new', { id: 1, ...snakePost });
+      const intermediatePost = snakePost;
+      const resultPost = { ...camelPost, id: 1 };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          titleString: String
+          categoryId: Number
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              fieldNameDenormalizer: $requestLevelDenormalizer
+            ) {
+            id
+            titleString
+            categoryId
+            # Add Workaround Fields
+            title_string
+            category_id
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: camelPost, requestLevelDenormalizer: snake_case },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining(intermediatePost),
+        }),
       );
     });
   });

@@ -69,6 +69,7 @@
     "prettier": "1.7.4",
     "rimraf": "2.6.1",
     "rollup": "0.45.2",
+    "snake-case": "^2.1.0",
     "ts-jest": "21.1.4",
     "typescript": "2.5.1",
     "uglify-js": "3.1.5"
