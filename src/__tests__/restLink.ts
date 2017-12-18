@@ -946,7 +946,7 @@ describe('Mutation', () => {
       fetchMock.restore();
     });
     it('supports POST requests', async () => {
-      expect.assertions(1);
+      expect.assertions(2);
 
       const link = new RestLink({ uri: '/api' });
 
@@ -956,8 +956,12 @@ describe('Mutation', () => {
       const resultPost = { __typename: 'Post', ...post };
 
       const createPostMutation = gql`
-        mutation publishPost($title: String) {
-          publishedPost(title: $title)
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
             @rest(type: "Post", path: "/posts/new", method: "POST") {
             id
             title
@@ -966,12 +970,126 @@ describe('Mutation', () => {
       `;
       const response = await makePromise<Result>(
         execute(link, {
-          operationName: 'publish',
+          operationName: 'publishPost',
           query: createPostMutation,
-          variables: { title: post.title },
+          variables: { input: { title: post.title } },
         }),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    it('supports PUT requests', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.put('/api/posts/1', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const replacePostMutation = gql`
+        fragment ReplaceablePostInput on REST {
+          id: ID
+          title: String
+        }
+
+        mutation changePost($id: ID!, $input: ReplaceablePostInput!) {
+          replacedPost(id: $id, input: $input)
+            @rest(type: "Post", path: "/posts/:id", method: "PUT") {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'republish',
+          query: replacePostMutation,
+          variables: { id: post.id, input: post },
+        }),
+      );
+      expect(response.data.replacedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'PUT' }),
+      );
+    });
+    it('supports PATCH requests', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo', categoryId: 6 };
+      fetchMock.patch('/api/posts/1', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const editPostMutation = gql`
+        fragment PartialPostInput on REST {
+          id: ID
+          title: String
+          categoryId: Number
+        }
+
+        mutation editPost($id: ID!, $input: PartialPostInput!) {
+          editedPost(id: $id, input: $input)
+            @rest(type: "Post", path: "/posts/:id", method: "PATCH") {
+            id
+            title
+            categoryId
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'editPost',
+          query: editPostMutation,
+          variables: { id: post.id, input: { categoryId: post.categoryId } },
+        }),
+      );
+      expect(response.data.editedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+    it('supports DELETE requests', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.delete('/api/posts/1', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const replacePostMutation = gql`
+        mutation deletePost($id: ID!) {
+          deletePostResponse(id: $id)
+            @rest(type: "Post", path: "/posts/:id", method: "DELETE") {
+            NoResponse
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'deletePost',
+          query: replacePostMutation,
+          variables: { id: post.id },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'DELETE' }),
+      );
     });
   });
 });
