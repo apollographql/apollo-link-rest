@@ -3,7 +3,7 @@ import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
-import snake_case = require('snake-case');
+const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
@@ -144,7 +144,6 @@ describe('Configuration', () => {
       const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
       const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
       fetchMock.get('/api/posts/1', snakePost);
-      const intermediatePost = snakePost;
       const resultPost = camelPost;
 
       const getPostQuery = gql`
@@ -177,7 +176,6 @@ describe('Configuration', () => {
       const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
       const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
       fetchMock.get('/api/posts/1', snakePost);
-      const intermediatePost = snakePost;
       const resultPost = camelPost;
 
       const getPostQuery = gql`
@@ -1171,7 +1169,6 @@ describe('Mutation', () => {
       // the id in this hash simulates the server *assigning* an id for the new post
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.delete('/api/posts/1', post);
-      const resultPost = { __typename: 'Post', ...post };
 
       const replacePostMutation = gql`
         mutation deletePost($id: ID!) {
@@ -1181,7 +1178,7 @@ describe('Mutation', () => {
           }
         }
       `;
-      const response = await makePromise<Result>(
+      await makePromise<Result>(
         execute(link, {
           operationName: 'deletePost',
           query: replacePostMutation,
