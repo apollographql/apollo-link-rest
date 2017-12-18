@@ -165,6 +165,29 @@ const convertObjectKeys = (
   converter: RestLink.FieldNameNormalizer,
   keypath: string[] = [],
 ): object => {
+  if (['string', 'number'].indexOf(typeof object) != -1) {
+    // Object is a scalar
+    return object;
+  }
+
+  const perItem = (acc: any, key: string) => {
+    let value = object[key];
+    const nestedKeyPath = keypath.concat([key]);
+    if (typeof value === 'object') {
+      value = convertObjectKeys(value, converter, nestedKeyPath);
+    }
+    if (Array.isArray(value)) {
+      value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
+    }
+    acc[convert(key, nestedKeyPath)] = value;
+    return acc;
+  };
+
+  if (Array.isArray(object)) {
+    const { body } = perItem({ body: object }, 'body');
+    return body;
+  }
+
   let convert: RestLink.KeyedFieldNameNormalizer = null;
   if (isSimpleFieldNameNormalizer(converter)) {
     convert = (name, keypath) => {
@@ -176,18 +199,7 @@ const convertObjectKeys = (
 
   return Object.keys(object)
     .filter(e => e !== '__typename')
-    .reduce((acc, key) => {
-      let value = object[key];
-      const nestedKeyPath = keypath.concat([key]);
-      if (typeof value === 'object') {
-        value = convertObjectKeys(value, converter, nestedKeyPath);
-      }
-      if (Array.isArray(value)) {
-        value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
-      }
-      acc[convert(key, nestedKeyPath)] = value;
-      return acc;
-    }, {});
+    .reduce(perItem, {});
 };
 
 const noOpNameNormalizer: RestLink.SimpleFieldNameNormalizer = (

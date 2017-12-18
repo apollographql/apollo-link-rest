@@ -3,7 +3,7 @@ import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
-import * as snake_case from 'snake-case';
+import snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
@@ -1303,6 +1303,112 @@ describe('Mutation', () => {
         expect.objectContaining({
           method: 'POST',
           body: expect.objectContaining(intermediatePost),
+        }),
+      );
+    });
+  });
+  describe('bodyKey/bodyBuilder', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('respects bodyKey for mutations', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost(
+          $someApiWithACustomBodyKey: PublishablePostInput!
+        ) {
+          publishedPost(someApiWithACustomBodyKey: $someApiWithACustomBodyKey)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              bodyKey: "someApiWithACustomBodyKey"
+            ) {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { someApiWithACustomBodyKey: { title: post.title } },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    it('respects bodyBuilder for mutations', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost(
+          $input: PublishablePostInput!
+          $customBuilder: any
+        ) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              bodyBuilder: $customBuilder
+            ) {
+            id
+            title
+          }
+        }
+      `;
+      function fakeEncryption(args) {
+        return 'MAGIC_PREFIX' + JSON.stringify(args.input);
+      }
+
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: {
+            input: { title: post.title },
+            customBuilder: fakeEncryption,
+          },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringMatching(
+            fakeEncryption({ input: { title: post.title } }),
+          ),
         }),
       );
     });
