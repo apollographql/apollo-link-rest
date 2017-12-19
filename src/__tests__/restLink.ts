@@ -98,40 +98,40 @@ describe('Configuration', () => {
       expect(data.post.title).toBeDefined();
       expect(data.post.tags[0].name).toBeDefined();
     });
-    // it('fieldNameNormalizer Too Late graphql-anywhere issues/2744', async () => {
-    //   // https://github.com/apollographql/apollo-client/issues/2744
-    //   expect.assertions(1);
+    it.skip('fieldNameNormalizer Too Late graphql-anywhere issues/2744', async () => {
+      // https://github.com/apollographql/apollo-client/issues/2744
+      expect.assertions(1);
 
-    //   const link = new RestLink({
-    //     uri: '/api',
-    //     fieldNameNormalizer: camelCase,
-    //   });
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
 
-    //   // the id in this hash simulates the server *assigning* an id for the new post
-    //   const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-    //   const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-    //   fetchMock.get('/api/posts/1', snakePost);
-    //   const intermediatePost = snakePost;
-    //   const resultPost = camelPost;
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.get('/api/posts/1', snakePost);
+      const intermediatePost = snakePost;
+      const resultPost = camelPost;
 
-    //   const getPostQuery = gql`
-    //     query lookupPost($id: String!) {
-    //       post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-    //         id
-    //         titleString
-    //         categoryId
-    //       }
-    //     }
-    //   `;
-    //   const response = await makePromise<Result>(
-    //     execute(link, {
-    //       operationName: 'lookupPost',
-    //       query: getPostQuery,
-    //       variables: { id: camelPost.id },
-    //     }),
-    //   );
-    //   expect(response.data.post).toEqual(resultPost);
-    // });
+      const getPostQuery = gql`
+        query lookupPost($id: String!) {
+          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
+            id
+            titleString
+            categoryId
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'lookupPost',
+          query: getPostQuery,
+          variables: { id: camelPost.id },
+        }),
+      );
+      expect(response.data.post).toEqual(resultPost);
+    });
     it('fieldNameNormalizer Too Late - Workaround 1', async () => {
       expect.assertions(1);
 
