@@ -1,10 +1,12 @@
 export default {
   entry: 'lib/index.js',
-  dest: 'lib/bundle.umd.js',
-  format: 'umd',
-  sourceMap: true,
-  moduleName: 'restLink',
+  output: {
+    file: 'lib/bundle.umd.js',
+    format: 'umd',
+  },
+  name: 'apollo-link-rest',
   exports: 'named',
+  sourceMap: true,
   onwarn,
 };
 
