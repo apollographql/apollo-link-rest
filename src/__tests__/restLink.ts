@@ -111,7 +111,6 @@ describe('Configuration', () => {
       const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
       const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
       fetchMock.get('/api/posts/1', snakePost);
-      const intermediatePost = snakePost;
       const resultPost = camelPost;
 
       const getPostQuery = gql`
