@@ -11,7 +11,7 @@
     "noUnusedParameters": false,
     "noUnusedLocals": true,
     "skipLibCheck": true,
-    "rootDir": "./src",
+    "rootDir": "src",
     "outDir": "lib"
   },
   "include": ["src/**/*.ts"],
