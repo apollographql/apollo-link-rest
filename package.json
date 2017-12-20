@@ -23,6 +23,7 @@
     "clean": "rimraf lib/* && rimraf coverage/*",
     "coverage:upload": "codecov",
     "danger": "danger run --verbose",
+    "deploy": "./scripts/deploy.sh",
     "filesize": "npm run build && npm run build:browser && bundlesize",
     "lint":
       "prettier --trailing-comma all --single-quote --write \"src/**/*.{j,t}s*\"",
@@ -39,11 +40,11 @@
       "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
   },
   "dependencies": {
-    "apollo-link": "^1.0.3",
+    "apollo-link": "^1.0.7",
     "graphql-anywhere": "^4.1.0-alpha.0"
   },
   "peerDependencies": {
-    "graphql": "0.11.7"
+    "graphql": "0.11.7 || ^0.12.3"
   },
   "devDependencies": {
     "@types/graphql": "0.11.5",
@@ -68,8 +69,8 @@
     "pre-commit": "1.2.2",
     "prettier": "1.7.4",
     "rimraf": "2.6.1",
-    "rollup": "0.45.2",
-    "snake-case": "^2.1.0",
+    "rollup": "0.52.x",
+    "snake-case": "2.1.x",
     "ts-jest": "21.1.4",
     "typescript": "2.5.1",
     "uglify-js": "3.1.5"

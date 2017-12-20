@@ -322,12 +322,15 @@ const resolver: Resolver = async (
   if (root === null) {
     exportVariables = {};
   }
-  if (isLeaf) {
-    const leafValue = root[resultKey];
-    if (directives && directives.export) {
-      exportVariables[directives.export.as] = leafValue;
-    }
-    return leafValue;
+
+  const currentNode = (root || {})[resultKey];
+  if (root && directives && directives.export) {
+    exportVariables[directives.export.as] = currentNode;
+  }
+
+  const isNotARestCall = !directives || !directives.rest;
+  if (isLeaf || isNotARestCall) {
+    return currentNode;
   }
   const {
     credentials,

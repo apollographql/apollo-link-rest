@@ -452,6 +452,52 @@ describe('Query single call', () => {
     expect(data1.post.title).toBe(postV1.title);
     expect(data2.post.titleText).toBe(postV2.titleText);
   });
+
+  it('can make a doubly nested query!', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+    const post = {
+      id: '1',
+      title: 'Love apollo',
+      nested: { data: 'test', secondNestKey: 'proof' },
+    };
+    const postWithNest = { ...post };
+    (postWithNest.nested as any).test = {
+      __typename: 'Inner',
+      positive: 'winning',
+    };
+
+    fetchMock.get('/api/post/1', post);
+    fetchMock.get('/api/post/proof', { positive: 'winning' });
+
+    const postTitleQuery = gql`
+      query postTitle {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+          nested {
+            data
+            secondNestKey @export(as: innerNest)
+            test @rest(type: "Inner", path: "/post/:innerNest") {
+              positive
+            }
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTitleQuery,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      post: { ...postWithNest, __typename: 'Post' },
+    });
+  });
 });
 
 describe('Query multiple calls', () => {
