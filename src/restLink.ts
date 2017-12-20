@@ -327,7 +327,6 @@ const resolver: Resolver = async (
   if (root && directives && directives.export) {
     exportVariables[directives.export.as] = currentNode;
   }
-
   const isNotARestCall = !directives || !directives.rest;
   if (isLeaf || isNotARestCall) {
     return currentNode;
