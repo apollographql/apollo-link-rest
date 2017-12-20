@@ -11,19 +11,101 @@ An Apollo Link to easily try out GraphQL without a full server. It can be used t
 
 ## Installation
 
-***Not yet published***
-
 ```bash
 npm install apollo-link-rest --save # or `yarn add apollo-link-rest`
 ```
 
 ## Usage
 
-```js
-import { RestLink } from "...";
+### Basics
 
-const link = new RestLink({ uri: '/api' });
+```js
+import { RestLink } from "apollo-link-rest";
+// Other necessary imports...
+
+// Create a RestLink for the Github API
+const link = new RestLink({ uri: "https://api.github.com" });
+
+// Configure the ApolloClient with the default cache and RestLink
+const client = new ApolloClient({
+  cache: new InMemoryCache(),
+  link
+});
+
+// A simple query to retrieve metada about a this repository
+const query = gql`
+  query Repo {
+    repo @rest(type: "Repo", path: "/repos/apollographql/apollo-link-rest") {
+      id
+      name
+      description
+    }
+  }
+`;
+
+// Invoke the query and log the response data
+client.query({ query }).then(response => {
+  console.log(response.data.repo);
+});
 ```
+
+[![Edit REST Link Basics](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/zkmnnxk5qp?expanddevtools=1&hidenavigation=1)
+
+### Apollo Client & React Apollo
+
+```js
+// Assuming similar setup above and using the ApolloProvider.
+
+// Standard React Component, using the injected data prop.
+class RepoBase extends React.Component<Props, {}> {
+  public render() {
+    const { data } = this.props;
+
+    if (data && data.repo) {
+      return (
+        <div>
+          <h3>
+            <a href={data.repo.html_url}>{data.repo.name}</a>
+          </h3>
+          <p>{data.repo.description}</p>
+        </div>
+      );
+    } else {
+      return null;
+    }
+  }
+}
+
+// Setup a basic query to retrieve data for that repository given a name
+const query = gql`
+  query Repo($name: String!) {
+    repo(name: $name) @rest(type: "Repo", path: "/repos/apollographql/:name") {
+      id
+      name
+      description
+      html_url
+    }
+  }
+`;
+
+// Connect the component using React Apollo's higher order component
+// and inject the data into the component. The Result type is what
+// we expect the shape of the response to be and OwnProps is what we
+// expect to be passed to this component.
+const Repo = graphql<Result, OwnProps>(query, {
+  options: ({ name }) => ({ variables: { name } })
+})(RepoBase);
+
+// Then, to use the <Repo /> component, pass the `name` of the repository
+render(
+  <ApolloProvider client={client}>
+    <Repo name="apollo-client" />
+  </ApolloProvider>,
+  document.getElementById("root")
+);
+```
+
+[![Edit REST Link with Apollo Client](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/4q1450o1z7?hidenavigation=1&module=%2FRepo.tsx)
 
 ## Options
 
