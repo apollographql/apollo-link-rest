@@ -244,7 +244,6 @@ const resolver: Resolver = async (
   context: RequestContext,
   info: ExecInfo,
 ) => {
-  console.log(info, root);
   const { directives, isLeaf, resultKey } = info;
   if (root === null) {
     exportVariables = {};
