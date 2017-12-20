@@ -11,8 +11,6 @@ An Apollo Link to easily try out GraphQL without a full server. It can be used t
 
 ## Installation
 
-***Not yet published***
-
 ```bash
 npm install apollo-link-rest --save # or `yarn add apollo-link-rest`
 ```
