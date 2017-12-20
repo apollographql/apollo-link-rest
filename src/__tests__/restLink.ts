@@ -3,10 +3,14 @@ import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
+const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
 
 import { RestLink } from '../';
-import { validateRequestMethodForOperationType } from '../restLink';
+import {
+  validateRequestMethodForOperationType,
+  normalizeHeaders,
+} from '../restLink';
 
 const sampleQuery = gql`
   query post {
@@ -93,6 +97,105 @@ describe('Configuration', () => {
 
       expect(data.post.title).toBeDefined();
       expect(data.post.tags[0].name).toBeDefined();
+    });
+    it.skip('fieldNameNormalizer Too Late graphql-anywhere issues/2744', async () => {
+      // https://github.com/apollographql/apollo-client/issues/2744
+      expect.assertions(1);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.get('/api/posts/1', snakePost);
+      const resultPost = camelPost;
+
+      const getPostQuery = gql`
+        query lookupPost($id: String!) {
+          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
+            id
+            titleString
+            categoryId
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'lookupPost',
+          query: getPostQuery,
+          variables: { id: camelPost.id },
+        }),
+      );
+      expect(response.data.post).toEqual(resultPost);
+    });
+    it('fieldNameNormalizer Too Late - Workaround 1', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.get('/api/posts/1', snakePost);
+      const resultPost = camelPost;
+
+      const getPostQuery = gql`
+        query lookupPost($id: String!) {
+          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
+            id
+            title_string
+            category_id
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'lookupPost',
+          query: getPostQuery,
+          variables: { id: camelPost.id },
+        }),
+      );
+      expect(response.data.post).toEqual(resultPost);
+    });
+    it('fieldNameNormalizer Too Late - Workaround 2', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.get('/api/posts/1', snakePost);
+      const resultPost = camelPost;
+
+      const getPostQuery = gql`
+        query lookupPost($id: String!) {
+          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
+            id
+            title_string
+            titleString
+            category_id
+            categoryId
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'lookupPost',
+          query: getPostQuery,
+          variables: { id: camelPost.id },
+        }),
+      );
+      expect(response.data.post).toEqual(resultPost);
     });
   });
 
@@ -473,7 +576,10 @@ describe('Query options', () => {
       expect.assertions(1);
       const link = new RestLink({
         uri: '/api',
-        credentials: 'my-credentials',
+        // Casting to RequestCredentials for testing purposes,
+        // the only valid values here defined by RequestCredentials from Fetch
+        // and typescript will yell at you for violating this!
+        credentials: 'my-credentials' as RequestCredentials,
       });
 
       const post = { id: '1', Title: 'Love apollo' };
@@ -539,7 +645,10 @@ describe('Query options', () => {
 
       const link = ApolloLink.from([
         credentialsMiddleware,
-        new RestLink({ uri: '/api', credentials: 'wrong-credentials' }),
+        new RestLink({
+          uri: '/api',
+          credentials: 'wrong-credentials' as RequestCredentials,
+        }),
       ]);
 
       const post = { id: '1', title: 'Love apollo' };
@@ -619,7 +728,7 @@ describe('Query options', () => {
       );
     });
 
-    it('throws if method is not GET', async () => {
+    it('throws if query method is not GET', async () => {
       expect.assertions(2);
 
       const link = new RestLink({ uri: '/api' });
@@ -653,6 +762,29 @@ describe('Query options', () => {
       expect(fetchMock.called('/api/post/1')).toBe(false);
     });
   });
+
+  /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
+  const flattenHeaders: ({ headers: Headers }) => { [key: string]: string } = ({
+    headers,
+  }) => {
+    const headersFlattened: { [key: string]: string } = {};
+    headers.forEach((value, key) => {
+      headersFlattened[key] = value;
+    });
+    return headersFlattened;
+  };
+
+  /** Helper that flattens headers & preserves duplicate objects */
+  const orderDupPreservingFlattenedHeaders: (
+    { headers: Headers },
+  ) => string[] = ({ headers }) => {
+    const orderedFlattened = [];
+    headers.forEach((value, key) => {
+      orderedFlattened.push(`${key}: ${value}`);
+    });
+    return orderedFlattened;
+  };
+
   describe('headers', () => {
     it('adds headers to the request from the context', async () => {
       expect.assertions(2);
@@ -693,13 +825,9 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            authorization: '1234',
-          }),
-        }),
-      );
+      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'authorization: 1234',
+      ]);
     });
     it('adds headers to the request from the setup', async () => {
       const link = new RestLink({
@@ -728,7 +856,7 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
+      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             authorization: '1234',
@@ -741,7 +869,13 @@ describe('Query options', () => {
 
       const headersMiddleware = new ApolloLink((operation, forward) => {
         operation.setContext({
-          headers: { authorization: '1234' },
+          headers: {
+            authorization: '1234',
+            // won't be overridden, will be duplicated because of headersToOverride
+            setup: 'in-context duplicate setup',
+            context: 'context',
+          },
+          headersToOverride: ['authorization'],
         });
         return forward(operation).map(result => {
           const { headers } = operation.getContext();
@@ -751,7 +885,10 @@ describe('Query options', () => {
       });
       const link = ApolloLink.from([
         headersMiddleware,
-        new RestLink({ uri: '/api', headers: { authorization: 'no user' } }),
+        new RestLink({
+          uri: '/api',
+          headers: { authorization: 'no user', setup: 'setup' },
+        }),
       ]);
 
       const post = { id: '1', title: 'Love apollo' };
@@ -775,11 +912,499 @@ describe('Query options', () => {
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
+      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'setup: setup',
+        'setup: in-context duplicate setup',
+        'authorization: 1234',
+        'context: context',
+      ]);
+    });
+    it('respects context-provided header-merge policy', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        /** This Merge Policy preserves the setup headers over the context headers */
+        const headersMergePolicy: RestLink.HeadersMergePolicy = (
+          ...headerGroups: Headers[]
+        ) => {
+          return headerGroups.reduce((accumulator, current) => {
+            normalizeHeaders(current).forEach((value, key) => {
+              if (!accumulator.has(key)) {
+                accumulator.append(key, value);
+              }
+            });
+            return accumulator;
+          }, new Headers());
+        };
+        operation.setContext({
+          headers: { authorization: 'context', context: 'context' },
+          headersMergePolicy,
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({
+          uri: '/api',
+          headers: { authorization: 'initial setup', setup: 'setup' },
+        }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
-            authorization: '1234',
+            authorization: 'initial setup',
+            setup: 'setup',
+            context: 'context',
           }),
+        }),
+      );
+    });
+    it('preserves duplicative headers in their correct order', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          headers: { authorization: 'context' },
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({
+          uri: '/api',
+          headers: { authorization: 'initial setup' },
+        }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      const { headers } = requestCall[1];
+      const orderedFlattened = [];
+      headers.forEach((value, key) => {
+        orderedFlattened.push(`${key}: ${value}`);
+      });
+      expect(orderedFlattened).toEqual([
+        'authorization: initial setup',
+        'authorization: context',
+      ]);
+    });
+  });
+});
+
+describe('Mutation', () => {
+  describe('basic support', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('supports POST requests', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    it('supports PUT requests', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.put('/api/posts/1', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const replacePostMutation = gql`
+        fragment ReplaceablePostInput on REST {
+          id: ID
+          title: String
+        }
+
+        mutation changePost($id: ID!, $input: ReplaceablePostInput!) {
+          replacedPost(id: $id, input: $input)
+            @rest(type: "Post", path: "/posts/:id", method: "PUT") {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'republish',
+          query: replacePostMutation,
+          variables: { id: post.id, input: post },
+        }),
+      );
+      expect(response.data.replacedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'PUT' }),
+      );
+    });
+    it('supports PATCH requests', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo', categoryId: 6 };
+      fetchMock.patch('/api/posts/1', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const editPostMutation = gql`
+        fragment PartialPostInput on REST {
+          id: ID
+          title: String
+          categoryId: Number
+        }
+
+        mutation editPost($id: ID!, $input: PartialPostInput!) {
+          editedPost(id: $id, input: $input)
+            @rest(type: "Post", path: "/posts/:id", method: "PATCH") {
+            id
+            title
+            categoryId
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'editPost',
+          query: editPostMutation,
+          variables: { id: post.id, input: { categoryId: post.categoryId } },
+        }),
+      );
+      expect(response.data.editedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+    it('supports DELETE requests', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.delete('/api/posts/1', post);
+
+      const replacePostMutation = gql`
+        mutation deletePost($id: ID!) {
+          deletePostResponse(id: $id)
+            @rest(type: "Post", path: "/posts/:id", method: "DELETE") {
+            NoResponse
+          }
+        }
+      `;
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'deletePost',
+          query: replacePostMutation,
+          variables: { id: post.id },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+  });
+
+  describe('fieldNameDenormalizer', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('corrects names to snake-case for link-level denormalizer', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+        fieldNameDenormalizer: snake_case,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.post('/api/posts/new', { id: 1, ...snakePost });
+      const intermediatePost = snakePost;
+      const resultPost = { ...camelPost, id: 1 };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          titleString: String
+          categoryId: Number
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            id
+            titleString
+            categoryId
+            # Add Workaround Fields
+            title_string
+            category_id
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: camelPost },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining(intermediatePost),
+        }),
+      );
+    });
+    it('corrects names to snake-case for request-level denormalizer', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.post('/api/posts/new', { id: 1, ...snakePost });
+      const intermediatePost = snakePost;
+      const resultPost = { ...camelPost, id: 1 };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          titleString: String
+          categoryId: Number
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              fieldNameDenormalizer: $requestLevelDenormalizer
+            ) {
+            id
+            titleString
+            categoryId
+            # Add Workaround Fields
+            title_string
+            category_id
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: camelPost, requestLevelDenormalizer: snake_case },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.objectContaining(intermediatePost),
+        }),
+      );
+    });
+  });
+  describe('bodyKey/bodyBuilder', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('respects bodyKey for mutations', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost(
+          $someApiWithACustomBodyKey: PublishablePostInput!
+        ) {
+          publishedPost(someApiWithACustomBodyKey: $someApiWithACustomBodyKey)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              bodyKey: "someApiWithACustomBodyKey"
+            ) {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { someApiWithACustomBodyKey: { title: post.title } },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+    it('respects bodyBuilder for mutations', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost(
+          $input: PublishablePostInput!
+          $customBuilder: any
+        ) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              bodyBuilder: $customBuilder
+            ) {
+            id
+            title
+          }
+        }
+      `;
+      function fakeEncryption(args) {
+        return 'MAGIC_PREFIX' + JSON.stringify(args.input);
+      }
+
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: {
+            input: { title: post.title },
+            customBuilder: fakeEncryption,
+          },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringMatching(
+            fakeEncryption({ input: { title: post.title } }),
+          ),
         }),
       );
     });
@@ -789,10 +1414,13 @@ describe('Query options', () => {
 describe('validateRequestMethodForOperationType', () => {
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
-      expect.assertions(1);
+      expect.assertions(2);
       expect(() =>
         validateRequestMethodForOperationType('GET', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
+      ).toThrowError('"mutation" operations do not support that HTTP-verb');
+      expect(() =>
+        validateRequestMethodForOperationType('GIBBERISH', 'mutation'),
+      ).toThrowError('"mutation" operations do not support that HTTP-verb');
     });
   });
   describe('for operation type "subscription"', () => {
@@ -800,22 +1428,6 @@ describe('validateRequestMethodForOperationType', () => {
       expect.assertions(1);
       expect(() =>
         validateRequestMethodForOperationType('GET', 'subscription'),
-      ).toThrowError('A "subscription" operation is not supported yet.');
-    });
-  });
-  describe('for operation type "mutation"', () => {
-    it('throws because it is not supported yet', () => {
-      expect.assertions(1);
-      expect(() =>
-        validateRequestMethodForOperationType('POST', 'mutation'),
-      ).toThrowError('A "mutation" operation is not supported yet.');
-    });
-  });
-  describe('for operation type "subscription"', () => {
-    it('throws because it is not supported yet', () => {
-      expect.assertions(1);
-      expect(() =>
-        validateRequestMethodForOperationType('POST', 'subscription'),
       ).toThrowError('A "subscription" operation is not supported yet.');
     });
   });
