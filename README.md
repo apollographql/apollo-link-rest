@@ -54,8 +54,6 @@ client.query({ query }).then(response => {
 ### Apollo Client & React Apollo
 
 ```js
-// Assuming similar setup above and using the ApolloProvider.
-
 // Standard React Component, using the injected data prop.
 class RepoBase extends React.Component<Props, {}> {
   public render() {
