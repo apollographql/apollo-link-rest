@@ -7,7 +7,7 @@ import SearchShow from './SearchShow';
 import './App.css';
 
 const restLink = new RestLink({
-  uri: 'http://api.tvmaze.com/',
+  uri: 'https://api.tvmaze.com/',
 });
 
 const client = new ApolloClient({
