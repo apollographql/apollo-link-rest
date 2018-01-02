@@ -1,0 +1,32 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
+
+label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+select {
+  font-size: 18px;
+}
+
+a {
+  color: #2ca599;
+}
+
+h3 {
+  margin: 32px 0 8px;
+  padding: 0;
+}
+
+p {
+  margin: 0;
+}
+
+.container {
+  max-width: 360px;
+  margin: 16px auto;
+}
