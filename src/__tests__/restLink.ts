@@ -206,7 +206,7 @@ describe('Configuration', () => {
       expect.assertions(1);
       const link = new RestLink({
         uri: '/api',
-        customGetJSON: (uri, options) => Promise.resolve({ title: 'custom' }),
+        customRequest: (uri, options) => Promise.resolve({ title: 'custom' }),
       });
 
       const postTitle = gql`

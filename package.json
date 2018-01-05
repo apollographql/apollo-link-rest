@@ -1,6 +1,6 @@
 {
-  "name": "apollo-link-rest",
-  "version": "0.0.1-alpha.1",
+  "name": "apollo-link-rest-vm",
+  "version": "0.0.1-alpha.2",
   "description": "Query existing REST services with GraphQL",
   "license": "MIT",
   "main": "./lib/bundle.umd.js",
@@ -9,12 +9,8 @@
   "typings": "./lib/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/apollographql/apollo-link-rest.git"
+    "url": "git+https://github.com/VladimirMilenko/apollo-link-rest.git"
   },
-  "bugs": {
-    "url": "https://github.com/apollographql/apollo-link-rest/issues"
-  },
-  "homepage": "https://github.com/apollographql/apollo-link-rest#readme",
   "scripts": {
     "build:browser":
       "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i apollo-link --i graphql --i apollo-utilities && npm run minify:browser",
