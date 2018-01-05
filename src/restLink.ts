@@ -39,6 +39,11 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
+  export type CustomGetJSON = (
+    request: RequestInfo,
+    init: RequestInit,
+  ) => Promise<any>;
+
   export type Options = {
     /**
      * The URI to use when fetching operations.
@@ -77,6 +82,11 @@ export namespace RestLink {
      * Use a custom fetch to handle REST calls.
      */
     customFetch?: CustomFetch;
+
+    /**
+     * Use a custom getJSON function to handle REST calls.
+     */
+    customGetJSON?: CustomGetJSON;
   };
 
   /** @rest(...) Directive Options */
@@ -307,6 +317,7 @@ interface RequestContext {
 
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
+  customGetJSON: RestLink.CustomGetJSON;
   operationType: OperationTypeNode;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
 }
@@ -336,6 +347,7 @@ const resolver: Resolver = async (
     endpoints,
     headers,
     customFetch,
+    customGetJSON,
     operationType,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
@@ -393,7 +405,14 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-
+    if (customGetJSON) {
+      return await customGetJSON(`${uri}${pathWithParams}`, {
+        credentials,
+        method,
+        headers,
+        body,
+      }).then(result => addTypeNameToResult(result, type));
+    }
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
@@ -422,6 +441,7 @@ export class RestLink extends ApolloLink {
   private fieldNameDenormalizer: RestLink.FieldNameNormalizer;
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
+  private customGetJSON: RestLink.CustomGetJSON;
 
   constructor({
     uri,
@@ -430,6 +450,7 @@ export class RestLink extends ApolloLink {
     fieldNameNormalizer,
     fieldNameDenormalizer,
     customFetch,
+    customGetJSON,
     credentials,
   }: RestLink.Options) {
     super();
@@ -463,6 +484,7 @@ export class RestLink extends ApolloLink {
     this.headers = normalizeHeaders(headers);
     this.credentials = credentials || null;
     this.customFetch = customFetch;
+    this.customGetJSON = customGetJSON;
   }
 
   public request(
@@ -522,6 +544,7 @@ export class RestLink extends ApolloLink {
           export: exportVariables,
           credentials,
           customFetch: this.customFetch,
+          customGetJSON: this.customGetJSON,
           operationType,
           fieldNameDenormalizer: this.fieldNameDenormalizer,
         },

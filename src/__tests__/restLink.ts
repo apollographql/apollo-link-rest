@@ -198,7 +198,35 @@ describe('Configuration', () => {
       expect(response.data.post).toEqual(resultPost);
     });
   });
+  describe('Custom getJSON', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('should apply custom getJSON if specified', async () => {
+      expect.assertions(1);
+      const link = new RestLink({
+        uri: '/api',
+        customGetJSON: (uri, options) => Promise.resolve({ title: 'custom' }),
+      });
 
+      const postTitle = gql`
+        query postTitle {
+          post @rest(type: "Post", path: "/post/1") {
+            title
+          }
+        }
+      `;
+
+      const { data } = await makePromise(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitle,
+        }),
+      );
+
+      expect(data.post.title).toBe('custom');
+    });
+  });
   describe('Custom fetch', () => {
     afterEach(() => {
       fetchMock.restore();
