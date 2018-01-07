@@ -3,12 +3,7 @@
     "outDir": "build/dist",
     "module": "esnext",
     "target": "es5",
-    "lib": [
-      "es6",
-      "dom",
-      // For more information see https://github.com/apollographql/graphql-subscriptions/issues/83
-      "esnext.asynciterable"
-    ],
+    "lib": ["es6", "dom", "esnext.asynciterable"],
     "sourceMap": true,
     "allowJs": true,
     "jsx": "react",
