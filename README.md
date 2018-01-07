@@ -51,11 +51,15 @@ client.query({ query }).then(response => {
 
 [![Edit Basic Example](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/apollographql/apollo-link-rest/tree/master/examples/simple)
 
-### Advanced
+### Apollo Client & React Apollo
+
+For an example of using REST Link with Apollo Client and React Apollo view this CodeSandbox:
 
 [![Edit Advanced Example](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/apollographql/apollo-link-rest/tree/master/examples/advanced)
 
 ### TypeScript
+
+For an example of using REST Link with Apollo Client, React Apollo and TypeScript view this CodeSandbox:
 
 [![Edit TypeScript Example](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/apollographql/apollo-link-rest/tree/master/examples/typescript)
 
