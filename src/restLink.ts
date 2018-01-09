@@ -172,11 +172,10 @@ const convertObjectKeys = (
     .reduce((acc: any, key: string) => {
       let value = object[key];
       const nestedKeyPath = keypath.concat([key]);
-      if (typeof value === 'object') {
-        value = convertObjectKeys(value, converter, nestedKeyPath);
-      }
       if (Array.isArray(value)) {
         value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
+      } else if (typeof value === 'object') {
+        value = convertObjectKeys(value, converter, nestedKeyPath);
       }
       acc[convert(key, nestedKeyPath)] = value;
       return acc;
