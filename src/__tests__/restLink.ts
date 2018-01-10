@@ -1353,6 +1353,61 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
+    it('converts body object keys correctly', async () => {
+      //test convertObjectKeys functionality
+      expect.assertions(3);
+
+      const link = new RestLink({ uri: '/api' });
+
+      //body containing Primitives, Objects and Arrays types
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+      const resultPost = { __typename: 'Post', ...post };
+
+      const createPostMutation = gql`
+        fragment Item on PublishablePostInput {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            id
+            title
+            items
+          }
+        }
+      `;
+
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      );
+      expect(response.data.publishedPost).toEqual(resultPost);
+
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(requestCall[1].body).toMatchObject(post);
+    });
+
     it('respects bodyKey for mutations', async () => {
       expect.assertions(2);
 
