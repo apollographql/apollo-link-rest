@@ -317,7 +317,7 @@ describe('Query single call', () => {
 
     const tagsWithTypeName = tags.map(tag => ({
       ...tag,
-      __typename: '[Tag]',
+      __typename: 'Tag',
     }));
     expect(data).toMatchObject({ tags: tagsWithTypeName });
   });

@@ -116,12 +116,17 @@ export namespace RestLink {
   }
 }
 
+const stripArrayCharsFromTypeName = (typename:string): string => {
+  return typename.replace(/[\[\]]/g, "");
+}
+
 const addTypeNameToResult = (
   result: any[] | object,
   __typename: string,
 ): any[] | object => {
   if (Array.isArray(result)) {
-    return result.map(e => ({ ...e, __typename }));
+    const fixedTypename = stripArrayCharsFromTypeName(__typename);
+    return result.map(e => ({ ...e, __typename: fixedTypename }));
   }
   return { ...result, __typename };
 };
