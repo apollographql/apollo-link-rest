@@ -1353,8 +1353,9 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
-    it('converts body object keys correctly', async () => {
-      //test convertObjectKeys functionality
+    it('builds request body containing Strings/Objects/Arrays types without chainging their types', async () => {
+      // tests convertObjectKeys functionality
+      // see: https://github.com/apollographql/apollo-link-rest/issues/45
       expect.assertions(3);
 
       const link = new RestLink({ uri: '/api' });
