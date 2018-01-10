@@ -23,87 +23,45 @@ npm install apollo-link-rest --save # or `yarn add apollo-link-rest`
 import { RestLink } from "apollo-link-rest";
 // Other necessary imports...
 
-// Create a RestLink for the Github API
-const link = new RestLink({ uri: "https://api.github.com" });
+// Create a RestLink for the REST API
+const restLink = new RestLink({
+  uri: 'https://swapi.co/api/',
+});
 
 // Configure the ApolloClient with the default cache and RestLink
 const client = new ApolloClient({
+  link: restLink,
   cache: new InMemoryCache(),
-  link
 });
 
-// A simple query to retrieve metada about a this repository
+// A simple query to retrieve data about the first person
 const query = gql`
-  query Repo {
-    repo @rest(type: "Repo", path: "/repos/apollographql/apollo-link-rest") {
-      id
+  query luke {
+    person @rest(type: "Person", path: "people/1/") {
       name
-      description
     }
   }
 `;
 
-// Invoke the query and log the response data
+// Invoke the query and log the person's name
 client.query({ query }).then(response => {
-  console.log(response.data.repo);
+  console.log(response.data.name);
 });
 ```
 
-[![Edit REST Link Basics](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/zkmnnxk5qp?expanddevtools=1&hidenavigation=1)
+[![Edit Basic Example](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/apollographql/apollo-link-rest/tree/master/examples/simple)
 
 ### Apollo Client & React Apollo
 
-```js
-// Standard React Component, using the injected data prop.
-class RepoBase extends React.Component<Props, {}> {
-  public render() {
-    const { data } = this.props;
+For an example of using REST Link with Apollo Client and React Apollo view this CodeSandbox:
 
-    if (data && data.repo) {
-      return (
-        <div>
-          <h3>
-            <a href={data.repo.html_url}>{data.repo.name}</a>
-          </h3>
-          <p>{data.repo.description}</p>
-        </div>
-      );
-    } else {
-      return null;
-    }
-  }
-}
+[![Edit Advanced Example](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/apollographql/apollo-link-rest/tree/master/examples/advanced)
 
-// Setup a basic query to retrieve data for that repository given a name
-const query = gql`
-  query Repo($name: String!) {
-    repo(name: $name) @rest(type: "Repo", path: "/repos/apollographql/:name") {
-      id
-      name
-      description
-      html_url
-    }
-  }
-`;
+### TypeScript
 
-// Connect the component using React Apollo's higher order component
-// and inject the data into the component. The Result type is what
-// we expect the shape of the response to be and OwnProps is what we
-// expect to be passed to this component.
-const Repo = graphql<Result, OwnProps>(query, {
-  options: ({ name }) => ({ variables: { name } })
-})(RepoBase);
+For an example of using REST Link with Apollo Client, React Apollo and TypeScript view this CodeSandbox:
 
-// Then, to use the <Repo /> component, pass the `name` of the repository
-render(
-  <ApolloProvider client={client}>
-    <Repo name="apollo-client" />
-  </ApolloProvider>,
-  document.getElementById("root")
-);
-```
-
-[![Edit REST Link with Apollo Client](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/4q1450o1z7?hidenavigation=1&module=%2FRepo.tsx)
+[![Edit TypeScript Example](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/github/apollographql/apollo-link-rest/tree/master/examples/typescript)
 
 ## Options
 
