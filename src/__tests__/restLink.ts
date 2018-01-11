@@ -300,9 +300,23 @@ describe('Query single call', () => {
     const tags = [{ name: 'apollo' }, { name: 'graphql' }];
     fetchMock.get('/api/tags', tags);
 
+    // Verify multidimensional array support: https://github.com/apollographql/apollo-client/issues/776
+    const keywordGroups = [
+      [{ name: 'group1.element1' }, { name: 'group1.element2' }],
+      [
+        { name: 'group2.element1' },
+        { name: 'group2.element2' },
+        { name: 'group2.element3' },
+      ],
+    ];
+    fetchMock.get('/api/keywordGroups', keywordGroups);
+
     const tagsQuery = gql`
       query tags {
         tags @rest(type: "[Tag]", path: "/tags") {
+          name
+        }
+        keywordGroups @rest(type: "[ [ Keyword ] ]", path: "/keywordGroups") {
           name
         }
       }
@@ -319,7 +333,8 @@ describe('Query single call', () => {
       ...tag,
       __typename: 'Tag',
     }));
-    expect(data).toMatchObject({ tags: tagsWithTypeName });
+    const keywordGroupsWithTypeName = keywordGroups.map(kg => kg.map(element=>({...element, __typename: 'Keyword'}));
+    expect(data).toMatchObject({ tags: tagsWithTypeName, keywordGroups: keywordGroupsWithTypeName });
   });
 
   it('can filter the query result', async () => {

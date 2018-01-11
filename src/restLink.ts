@@ -116,17 +116,27 @@ export namespace RestLink {
   }
 }
 
-const stripArrayCharsFromTypeName = (typename:string): string => {
-  return typename.replace(/[\[\]]/g, "");
-}
+const popOneSetOfArrayBracketsFromTypeName = (typename: string): string => {
+  const noSpace = typename.replace(/\s/g, '');
+  const sansOneBracketPair = noSpace.replace(
+    /\[(.*)\]/,
+    (str, matchStr, offset, fullStr) => {
+      return (
+        ((matchStr != null && matchStr.length) > 0 ? matchStr : null) || noSpace
+      );
+    },
+  );
+  return sansOneBracketPair;
+};
 
 const addTypeNameToResult = (
   result: any[] | object,
   __typename: string,
 ): any[] | object => {
   if (Array.isArray(result)) {
-    const fixedTypename = stripArrayCharsFromTypeName(__typename);
-    return result.map(e => ({ ...e, __typename: fixedTypename }));
+    const fixedTypename = popOneSetOfArrayBracketsFromTypeName(__typename);
+    // Recursion needed for multi-dimensional arrays
+    return result.map(e => addTypeNameToResult(e, fixedTypename));
   }
   return { ...result, __typename };
 };
