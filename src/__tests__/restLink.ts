@@ -333,7 +333,7 @@ describe('Query single call', () => {
       ...tag,
       __typename: 'Tag',
     }));
-    const keywordGroupsWithTypeName = keywordGroups.map(kg => kg.map(element=>({...element, __typename: 'Keyword'}));
+    const keywordGroupsWithTypeName = keywordGroups.map(kg => kg.map(element=>({...element, __typename: 'Keyword'})));
     expect(data).toMatchObject({ tags: tagsWithTypeName, keywordGroups: keywordGroupsWithTypeName });
   });
 
