@@ -6,9 +6,8 @@ import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
 
-import { RestLink } from '../';
-import { RestLink, TypeNameContext } from '../restLink';
 import {
+  RestLink,
   validateRequestMethodForOperationType,
   normalizeHeaders,
 } from '../restLink';
