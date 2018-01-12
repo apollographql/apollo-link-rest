@@ -6,8 +6,8 @@ import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
 
-import { RestLink } from '../';
 import {
+  RestLink,
   validateRequestMethodForOperationType,
   normalizeHeaders,
 } from '../restLink';
@@ -233,6 +233,153 @@ describe('Configuration', () => {
       expect(data.post.title).toBe('custom');
     });
   });
+
+  describe('Complex responses need nested __typename insertions', () => {
+    it('can configure typename by providing a custom type-patcher', async () => {
+      expect.assertions(1);
+
+      const TypeNameContextGetNodeKeyPath = (
+        context: RestLink.TypeNameContext,
+        curPath: string[] = [],
+      ): string[] => {
+        if (!context) {
+          throw new Error('Invalid node, no context provided.');
+        }
+        if (context.__typename) {
+          curPath.unshift(context.__typename);
+          return curPath;
+        }
+
+        if (context.key != null) {
+          curPath.unshift(context.key);
+        } else {
+          // Multi-dimensional array case will be clunky
+          curPath.unshift('@');
+        }
+
+        if (context.parent) {
+          return TypeNameContextGetNodeKeyPath(context.parent, curPath);
+        }
+        return curPath;
+      };
+
+      const customMappings = {
+        'Outer.simpleDoubleNesting': 'SimpleDoubleNesting',
+        'Outer.simpleDoubleNesting.inner1': 'Inner1',
+        'Outer.simpleDoubleNesting.inner1.reused': 'Reused',
+        'Outer.inner1': 'Inner1',
+        'Outer.inner1.reused': 'Reused',
+        'Outer.nestedArrays': 'NestedArrays',
+        'Outer.nestedArrays.singlyArray.@': 'SinglyNestedArrayEntry',
+        'Outer.nestedArrays.doubleNestedArray.@.@': 'DoublyNestedArrayEntry',
+      };
+
+      const typePatcher: RestLink.FunctionalTypePatcher = (
+        node: any,
+        context: RestLink.TypeNameContext,
+      ) => {
+        if (context.isSticky) {
+          return RestLink.TypeNameContextGetTypeName(context);
+        }
+        const keypathString = TypeNameContextGetNodeKeyPath(context).join('.');
+        const mapping = customMappings[keypathString];
+        // console.log('Keypath', keypathString, mapping);
+        return mapping;
+      };
+      const link = new RestLink({ uri: '/api', typePatcher });
+      const root = {
+        id: '1',
+        inner1: { data: 'outer.inner1', reused: { id: 1 } },
+        simpleDoubleNesting: {
+          data: 'dd',
+          inner1: { data: 'outer.SDN.inner1', reused: { id: 2 } },
+        },
+        nestedArrays: {
+          unrelatedArray: ['string', 10],
+          singlyArray: [{ data: 'entry!' }],
+          doubleNestedArray: [[{ data: 'inception.entry!' }]],
+        },
+      };
+      const rootTyped = {
+        __typename: 'Outer',
+        id: '1',
+        inner1: {
+          __typename: 'Inner1',
+          data: 'outer.inner1',
+          reused: { __typename: 'Reused', id: 1 },
+        },
+        simpleDoubleNesting: {
+          __typename: 'SimpleDoubleNesting',
+          data: 'dd',
+          inner1: {
+            __typename: 'Inner1',
+            data: 'outer.SDN.inner1',
+            reused: { __typename: 'Reused', id: 2 },
+          },
+        },
+        nestedArrays: {
+          __typename: 'NestedArrays',
+          unrelatedArray: ['string', 10],
+          singlyArray: [
+            { __typename: 'SinglyNestedArrayEntry', data: 'entry!' },
+          ],
+          doubleNestedArray: [
+            [
+              {
+                __typename: 'DoublyNestedArrayEntry',
+                data: 'inception.entry!',
+              },
+            ],
+          ],
+        },
+      };
+
+      fetchMock.get('/api/outer/1', root);
+
+      const someQuery = gql`
+        query someQuery {
+          outer @rest(type: "Outer", path: "/outer/1") {
+            id
+            inner1 {
+              data
+              reused {
+                id
+              }
+            }
+            simpleDoubleNesting {
+              data
+              inner1 {
+                data
+                reused {
+                  id
+                }
+              }
+            }
+            nestedArrays {
+              unrelatedArray
+              singlyArray {
+                data
+              }
+              doubleNestedArray {
+                data
+              }
+            }
+          }
+        }
+      `;
+
+      const { data } = await makePromise<Result>(
+        execute(link, {
+          operationName: 'someOperation',
+          query: someQuery,
+        }),
+      );
+
+      expect(data).toMatchObject({
+        outer: rootTyped,
+      });
+    });
+  });
 });
 
 describe('Query single call', () => {
@@ -300,9 +447,23 @@ describe('Query single call', () => {
     const tags = [{ name: 'apollo' }, { name: 'graphql' }];
     fetchMock.get('/api/tags', tags);
 
+    // Verify multidimensional array support: https://github.com/apollographql/apollo-client/issues/776
+    const keywordGroups = [
+      [{ name: 'group1.element1' }, { name: 'group1.element2' }],
+      [
+        { name: 'group2.element1' },
+        { name: 'group2.element2' },
+        { name: 'group2.element3' },
+      ],
+    ];
+    fetchMock.get('/api/keywordGroups', keywordGroups);
+
     const tagsQuery = gql`
       query tags {
         tags @rest(type: "[Tag]", path: "/tags") {
+          name
+        }
+        keywordGroups @rest(type: "[ [ Keyword ] ]", path: "/keywordGroups") {
           name
         }
       }
@@ -317,9 +478,15 @@ describe('Query single call', () => {
 
     const tagsWithTypeName = tags.map(tag => ({
       ...tag,
-      __typename: '[Tag]',
+      __typename: 'Tag',
     }));
-    expect(data).toMatchObject({ tags: tagsWithTypeName });
+    const keywordGroupsWithTypeName = keywordGroups.map(kg =>
+      kg.map(element => ({ ...element, __typename: 'Keyword' })),
+    );
+    expect(data).toMatchObject({
+      tags: tagsWithTypeName,
+      keywordGroups: keywordGroupsWithTypeName,
+    });
   });
 
   it('can filter the query result', async () => {
