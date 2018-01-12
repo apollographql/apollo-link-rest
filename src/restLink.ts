@@ -13,7 +13,6 @@ import {
 } from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
-import { TypeNameContextGetRoot } from './restLink';
 
 export namespace RestLink {
   export type URI = string;
