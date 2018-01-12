@@ -13,6 +13,7 @@ import {
 } from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
+import { TypeNameContextGetRoot } from './restLink';
 
 export namespace RestLink {
   export type URI = string;
@@ -32,6 +33,27 @@ export namespace RestLink {
 
   export interface FieldNameNormalizer {
     (fieldName: string, keypath?: string[]): string;
+  }
+
+  /** Used for mapping responses */
+  export interface TypeNameContext {
+    /** Back-reference to the parent context */
+    parent: TypeNameContextReference;
+    /** If this is a nested field, it will have the key name here */
+    key: string | null;
+    /** If there is a typename at this level, it'll be set here */
+    __typename: string | null;
+    /** TypeName was provided from the outside, possibly as an `@rest(type:)` parameter */
+    isSticky: boolean;
+    /** This type-context represents an array (these need to be handled specially) */
+    isArray: boolean;
+  }
+  export type TypeNameContextReference = TypeNameContext | null;
+
+  /** injects __typename using user-supplied code */
+  export interface FunctionalTypePatcher {
+    // TODO: consider adding RequestContext, Request-args, and ExecInfo parameters to this?
+    (node: any, context: TypeNameContext): any;
   }
 
   export type CustomFetch = (
@@ -67,6 +89,11 @@ export namespace RestLink {
      * Can be overridden at the mutation-call-site (in the rest-directive).
      */
     fieldNameDenormalizer?: FieldNameNormalizer;
+
+    /**
+     * Structure to allow you to specify the __typename when you have nested objects in your REST response!
+     */
+    typePatcher?: FunctionalTypePatcher;
 
     /**
      * The credentials policy you want to use for the fetch call.
@@ -113,17 +140,58 @@ export namespace RestLink {
      * @default Uses RestLink.fieldNameDenormalizer
      */
     fieldNameDenormalizer?: RestLink.FieldNameNormalizer;
+    /**
+     * A method to allow insertion of __typename deep in response objects
+     */
+    typePatcher?: RestLink.FunctionalTypePatcher;
   }
 }
 
-const addTypeNameToResult = (
-  result: any[] | object,
-  __typename: string,
-): any[] | object => {
-  if (Array.isArray(result)) {
-    return result.map(e => ({ ...e, __typename }));
+const popOneSetOfArrayBracketsFromTypeName = (typename: string): string => {
+  const noSpace = typename.replace(/\s/g, '');
+  const sansOneBracketPair = noSpace.replace(
+    /\[(.*)\]/,
+    (str, matchStr, offset, fullStr) => {
+      return (
+        ((matchStr != null && matchStr.length) > 0 ? matchStr : null) || noSpace
+      );
+    },
+  );
+  return sansOneBracketPair;
+};
+
+const TypeNameContextGetRoot = (
+  node: RestLink.TypeNameContext | null,
+): RestLink.TypeNameContext | null => {
+  if (node == null || node.parent == null) {
+    return node;
   }
-  return { ...result, __typename };
+  return TypeNameContextGetRoot(node.parent);
+};
+const TypeNameContextGetTypeName = (
+  node: RestLink.TypeNameContext | null,
+): string => {
+  if (node == null) {
+    throw new Error(
+      "Can't search for a typename in the void. (TypeContext is null)",
+    );
+  }
+  return node.__typename || TypeNameContextGetTypeName(node.parent);
+};
+
+const defaultTypePatcher: RestLink.FunctionalTypePatcher = (
+  node: any,
+  context: RestLink.TypeNameContext,
+) => {
+  if (Array.isArray(node)) {
+    throw new Error(
+      "Can't attach a typename to arrays. (should be handled before we get here!)",
+    );
+  } else if (typeof node != 'object') {
+    throw new Error('Can only patch types for objects.');
+  }
+  const result = context.isSticky ? TypeNameContextGetTypeName(context) : null;
+  return result;
 };
 
 const getURIFromEndpoints = (
@@ -308,6 +376,7 @@ interface RequestContext {
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  typePatcher: RestLink.FunctionalTypePatcher;
 }
 
 const resolver: Resolver = async (
@@ -336,6 +405,7 @@ const resolver: Resolver = async (
     headers,
     customFetch,
     operationType,
+    typePatcher,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
   const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
@@ -393,6 +463,14 @@ const resolver: Resolver = async (
 
     validateRequestMethodForOperationType(method, operationType || 'query');
 
+    const typeContext: RestLink.TypeNameContext = {
+      __typename: type,
+      isSticky: true,
+      isArray: false,
+      parent: null,
+      key: null,
+    };
+
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
@@ -400,10 +478,74 @@ const resolver: Resolver = async (
       body,
     })
       .then(res => res.json())
-      .then(result => addTypeNameToResult(result, type));
+      .then(result =>
+        recursivelyPatchTypes(
+          result,
+          { ...typeContext, isArray: Array.isArray(result) },
+          typePatcher,
+        ),
+      );
   } catch (error) {
     throw error;
   }
+};
+
+const recursivelyPatchTypes = (
+  result: any,
+  typeContext: RestLink.TypeNameContext,
+  typePatcher,
+): any => {
+  if (result == null) {
+    return result;
+  }
+  if (
+    ['string', 'symbol', 'number', 'undefined', 'function'].indexOf(
+      typeof result,
+    ) !== -1
+  ) {
+    return result;
+  }
+  if (Array.isArray(result)) {
+    typeContext.isArray = true;
+    if (result.length == 0) {
+      return [];
+    }
+
+    return result.map(inner => {
+      return recursivelyPatchTypes(
+        inner,
+        {
+          ...typeContext,
+          parent: typeContext,
+          isArray: false,
+          key: null,
+          __typename: typeContext.isSticky
+            ? popOneSetOfArrayBracketsFromTypeName(typeContext.__typename)
+            : null,
+        },
+        typePatcher,
+      );
+    });
+  }
+
+  const __typename = typePatcher(result, typeContext);
+  const finalResultSeed = __typename != null ? { __typename } : {};
+
+  const tmpContext = {
+    ...typeContext,
+    parent: typeContext,
+    __typename: null,
+    isSticky: false,
+  };
+
+  return Object.keys(result).reduce((nextResult, key) => {
+    nextResult[key] = recursivelyPatchTypes(
+      result[key],
+      { ...tmpContext, key: key, isSticky: false },
+      typePatcher,
+    );
+    return nextResult;
+  }, finalResultSeed);
 };
 
 /**
@@ -415,10 +557,14 @@ const DEFAULT_ENDPOINT_KEY = '';
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
  */
 export class RestLink extends ApolloLink {
+  static TypeNameContextGetRoot = TypeNameContextGetRoot;
+  static TypeNameContextGetTypeName = TypeNameContextGetTypeName;
+
   private endpoints: RestLink.Endpoints;
   private headers: Headers;
   private fieldNameNormalizer: RestLink.FieldNameNormalizer;
   private fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  private typePatcher: RestLink.FunctionalTypePatcher;
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
 
@@ -428,6 +574,7 @@ export class RestLink extends ApolloLink {
     headers,
     fieldNameNormalizer,
     fieldNameDenormalizer,
+    typePatcher,
     customFetch,
     credentials,
   }: RestLink.Options) {
@@ -459,6 +606,7 @@ export class RestLink extends ApolloLink {
 
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.fieldNameDenormalizer = fieldNameDenormalizer || null;
+    this.typePatcher = typePatcher || defaultTypePatcher;
     this.headers = normalizeHeaders(headers);
     this.credentials = credentials || null;
     this.customFetch = customFetch;
@@ -523,6 +671,7 @@ export class RestLink extends ApolloLink {
           customFetch: this.customFetch,
           operationType,
           fieldNameDenormalizer: this.fieldNameDenormalizer,
+          typePatcher: this.typePatcher,
         },
         variables,
         resolverOptions,
