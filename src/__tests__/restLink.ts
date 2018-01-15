@@ -98,6 +98,41 @@ describe('Configuration', () => {
       expect(data.post.title).toBeDefined();
       expect(data.post.tags[0].name).toBeDefined();
     });
+    it('should preserve __typename when using fieldNameNormalizer', async () => {
+      expect.assertions(2);
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+      });
+      const post = { id: '1', Title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const tags = [{ Name: 'apollo' }, { Name: 'graphql' }];
+      fetchMock.get('/api/tags', tags);
+
+      const postAndTags = gql`
+        query postAndTags {
+          post @rest(type: "Post", path: "/post/1") {
+            __typename
+            id
+            Title
+            Tags @rest(type: "[Tag]", path: "/tags") {
+              Name
+            }
+          }
+        }
+      `;
+
+      const { data } = await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postAndTags,
+        }),
+      );
+
+      expect(data.post.__typename).toBeDefined();
+      expect(data.post.__typename).toEqual('Post');
+    });
     it.skip('fieldNameNormalizer Too Late graphql-anywhere issues/2744', async () => {
       // https://github.com/apollographql/apollo-client/issues/2744
       expect.assertions(1);
@@ -161,7 +196,7 @@ describe('Configuration', () => {
           variables: { id: camelPost.id },
         }),
       );
-      expect(response.data.post).toEqual(resultPost);
+      expect(response.data.post).toEqual(expect.objectContaining(resultPost));
     });
     it('fieldNameNormalizer Too Late - Workaround 2', async () => {
       expect.assertions(1);
@@ -195,7 +230,7 @@ describe('Configuration', () => {
           variables: { id: camelPost.id },
         }),
       );
-      expect(response.data.post).toEqual(resultPost);
+      expect(response.data.post).toEqual(expect.objectContaining(resultPost));
     });
   });
 
@@ -1283,7 +1318,9 @@ describe('Mutation', () => {
           variables: { input: camelPost },
         }),
       );
-      expect(response.data.publishedPost).toEqual(resultPost);
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
+      );
 
       const requestCall = fetchMock.calls('/api/posts/new')[0];
       expect(requestCall[1]).toEqual(
@@ -1338,7 +1375,9 @@ describe('Mutation', () => {
           variables: { input: camelPost, requestLevelDenormalizer: snake_case },
         }),
       );
-      expect(response.data.publishedPost).toEqual(resultPost);
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
+      );
 
       const requestCall = fetchMock.calls('/api/posts/new')[0];
       expect(requestCall[1]).toEqual(
