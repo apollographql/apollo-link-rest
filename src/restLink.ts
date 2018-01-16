@@ -162,6 +162,11 @@ const replaceParam = (
   return endpoint.replace(`:${name}`, value);
 };
 
+/**
+ * Some keys should be passed through transparently without normalizing/de-normalizing
+ */
+const noMangleKeys = ['__typename'];
+
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
@@ -182,19 +187,23 @@ const convertObjectKeys = (
     return object;
   }
 
-  return Object.keys(object)
-    .filter(e => e !== '__typename')
-    .reduce((acc: any, key: string) => {
-      let value = object[key];
-      const nestedKeyPath = keypath.concat([key]);
-      if (Array.isArray(value)) {
-        value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
-      } else if (typeof value === 'object') {
-        value = convertObjectKeys(value, converter, nestedKeyPath);
-      }
-      acc[convert(key, nestedKeyPath)] = value;
+  return Object.keys(object).reduce((acc: any, key: string) => {
+    let value = object[key];
+
+    if (noMangleKeys.indexOf(key) !== -1) {
+      acc[key] = value;
       return acc;
-    }, {});
+    }
+
+    const nestedKeyPath = keypath.concat([key]);
+    if (Array.isArray(value)) {
+      value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
+    } else if (typeof value === 'object') {
+      value = convertObjectKeys(value, converter, nestedKeyPath);
+    }
+    acc[convert(key, nestedKeyPath)] = value;
+    return acc;
+  }, {});
 };
 
 const noOpNameNormalizer: RestLink.FieldNameNormalizer = (name: string) => {
