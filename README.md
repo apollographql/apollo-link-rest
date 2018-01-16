@@ -24,6 +24,7 @@ import { RestLink } from "apollo-link-rest";
 // Other necessary imports...
 
 // Create a RestLink for the REST API
+// If you are using multiple link types, restLink should go first.
 const restLink = new RestLink({
   uri: 'https://swapi.co/api/',
 });
