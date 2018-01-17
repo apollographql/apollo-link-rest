@@ -39,6 +39,11 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
+  export type CustomRequest = (
+    request: RequestInfo,
+    init: RequestInit,
+  ) => Promise<any>;
+
   export type Options = {
     /**
      * The URI to use when fetching operations.
@@ -77,6 +82,11 @@ export namespace RestLink {
      * Use a custom fetch to handle REST calls.
      */
     customFetch?: CustomFetch;
+
+    /**
+     * Use a custom getJSON function to handle REST calls.
+     */
+    customRequest?: CustomRequest;
   };
 
   /** @rest(...) Directive Options */
@@ -330,6 +340,7 @@ interface RequestContext {
 
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
+  customRequest: RestLink.CustomRequest;
   operationType: OperationTypeNode;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
 }
@@ -359,6 +370,7 @@ const resolver: Resolver = async (
     endpoints,
     headers,
     customFetch,
+    customRequest,
     operationType,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
@@ -370,6 +382,8 @@ const resolver: Resolver = async (
       (acc, e) => replaceParam(acc, e, argsWithExport[e]),
       path,
     );
+    const requestUrl = `${uri}${pathWithParams}`;
+
     if (pathWithParams.includes(':')) {
       throw new Error(
         'Missing params to run query, specify it in the query params or use an export directive',
@@ -416,15 +430,26 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-
-    return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
+    const requestParameters = {
       credentials,
       method,
       headers,
       body,
-    })
-      .then(res => res.json())
-      .then(result => addTypeNameToResult(result, type));
+    };
+    let requestResult: Promise<any> = null;
+
+    if (customRequest) {
+      requestResult = customRequest(requestUrl, requestParameters);
+    } else {
+      requestResult = (customFetch || fetch)(
+        requestUrl,
+        requestParameters,
+      ).then(res => res.json());
+    }
+
+    return await requestResult.then(result =>
+      addTypeNameToResult(result, type),
+    );
   } catch (error) {
     throw error;
   }
@@ -445,6 +470,7 @@ export class RestLink extends ApolloLink {
   private fieldNameDenormalizer: RestLink.FieldNameNormalizer;
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
+  private customRequest: RestLink.CustomRequest;
 
   constructor({
     uri,
@@ -453,6 +479,7 @@ export class RestLink extends ApolloLink {
     fieldNameNormalizer,
     fieldNameDenormalizer,
     customFetch,
+    customRequest,
     credentials,
   }: RestLink.Options) {
     super();
@@ -486,6 +513,7 @@ export class RestLink extends ApolloLink {
     this.headers = normalizeHeaders(headers);
     this.credentials = credentials || null;
     this.customFetch = customFetch;
+    this.customRequest = customRequest;
   }
 
   public request(
@@ -545,6 +573,7 @@ export class RestLink extends ApolloLink {
           export: exportVariables,
           credentials,
           customFetch: this.customFetch,
+          customRequest: this.customRequest,
           operationType,
           fieldNameDenormalizer: this.fieldNameDenormalizer,
         },
