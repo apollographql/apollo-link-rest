@@ -46,8 +46,8 @@ describe('Configuration', () => {
     });
 
     it('throws when invalid typePatchers', async () => {
-      expect.assertions(3);
-      // If using typescript the typescript compiler protects us against allowing this.
+      expect.assertions(4);
+      // If using typescript, the typescript compiler protects us against allowing this.
       // but if people use javascript or force it, we want exceptions to be thrown.
       const pretendItsJavascript = (arg: any): any => arg;
 
@@ -67,6 +67,14 @@ describe('Configuration', () => {
         new RestLink({
           uri: '/correct',
           typePatcher: pretendItsJavascript([]),
+        });
+      }).toThrow();
+      expect(() => {
+        new RestLink({
+          uri: '/correct',
+          typePatcher: pretendItsJavascript({
+            key: 'my values are not functions',
+          }),
         });
       }).toThrow();
     });

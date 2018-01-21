@@ -499,7 +499,17 @@ export class RestLink extends ApolloLink {
       this.typePatcher = (result, __typename, _2) => {
         return { __typename, ...result };
       };
-    } else if (!Array.isArray(typePatcher) && typeof typePatcher === 'object') {
+    } else if (
+      !Array.isArray(typePatcher) &&
+      typeof typePatcher === 'object' &&
+      Object.keys(typePatcher)
+        .map(key => typePatcher[key])
+        .reduce(
+          // Make sure all of the values are patcher-functions
+          (current, patcher) => current && typeof patcher === 'function',
+          true,
+        )
+    ) {
       const table: RestLink.TypePatcherTable = typePatcher;
       this.typePatcher = (
         data: any,
