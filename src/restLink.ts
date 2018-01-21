@@ -42,7 +42,6 @@ export namespace RestLink {
   export interface TypePatcherTable {
     [typename: string]: FunctionalTypePatcher;
   }
-  export type TypePatcher = FunctionalTypePatcher | TypePatcherTable;
 
   export type CustomFetch = (
     request: RequestInfo,
@@ -81,7 +80,7 @@ export namespace RestLink {
     /**
      * Structure to allow you to specify the __typename when you have nested objects in your REST response!
      */
-    typePatcher?: TypePatcher;
+    typePatcher?: TypePatcherTable;
 
     /**
      * The credentials policy you want to use for the fetch call.
@@ -516,8 +515,6 @@ export class RestLink extends ApolloLink {
           ...subPatcher(data, outerType, patchDeeper),
         };
       };
-    } else if (typeof typePatcher === 'function') {
-      this.typePatcher = typePatcher as RestLink.FunctionalTypePatcher;
     } else {
       throw new Error(
         'RestLink was configured with a typePatcher of invalid type!',

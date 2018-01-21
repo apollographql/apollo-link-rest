@@ -261,59 +261,6 @@ describe('Configuration', () => {
   });
 });
 describe('Complex responses need nested __typename insertions', () => {
-  it('can configure typename by providing a custom type-patcher function', async () => {
-    expect.assertions(1);
-
-    const link = new RestLink({
-      uri: '/api',
-      typePatcher: (
-        data: any,
-        outerType: string,
-        rootTypePatcher: RestLink.FunctionalTypePatcher,
-      ) => {
-        const { nested, ...rest } = data;
-        const resultNested = { ...nested, __typename: 'Nested' };
-        return {
-          nested: resultNested,
-          ...rest,
-          // If you pass a single function to type patcher, you're responsible for injecting the outerType
-          __typename: outerType,
-        };
-      },
-    });
-    const post = {
-      id: '1',
-      title: 'Love apollo',
-      nested: { data: 'test' },
-    };
-    const result: any = { ...post, __typename: 'Post' };
-    result.nested = { ...result.nested, __typename: 'Nested' };
-
-    fetchMock.get('/api/post/1', post);
-
-    const postTitleQuery = gql`
-      query postTitle {
-        post @rest(type: "Post", path: "/post/1") {
-          id
-          title
-          nested {
-            data
-          }
-        }
-      }
-    `;
-
-    const { data } = await makePromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-      }),
-    );
-
-    expect(data).toMatchObject({
-      post: result,
-    });
-  });
   it('can configure typename by providing a custom type-patcher table', async () => {
     expect.assertions(1);
 
