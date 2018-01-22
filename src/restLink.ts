@@ -34,6 +34,15 @@ export namespace RestLink {
     (fieldName: string, keypath?: string[]): string;
   }
 
+  /** injects __typename using user-supplied code */
+  export interface FunctionalTypePatcher {
+    (data: any, outerType: string, patchDeeper: FunctionalTypePatcher): any;
+  }
+  /** Table of mappers that help inject __typename per type described therein */
+  export interface TypePatcherTable {
+    [typename: string]: FunctionalTypePatcher;
+  }
+
   export type CustomFetch = (
     request: RequestInfo,
     init: RequestInit,
@@ -67,6 +76,15 @@ export namespace RestLink {
      * Can be overridden at the mutation-call-site (in the rest-directive).
      */
     fieldNameDenormalizer?: FieldNameNormalizer;
+
+    /**
+     * Structure to allow you to specify the __typename when you have nested objects in your REST response!
+     * 
+     * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
+     *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
+     *           And consider submitting alternate solutions to the problem!
+     */
+    typePatcher?: TypePatcherTable;
 
     /**
      * The credentials policy you want to use for the fetch call.
@@ -113,6 +131,10 @@ export namespace RestLink {
      * @default Uses RestLink.fieldNameDenormalizer
      */
     fieldNameDenormalizer?: RestLink.FieldNameNormalizer;
+    /**
+     * A method to allow insertion of __typename deep in response objects
+     */
+    typePatcher?: RestLink.FunctionalTypePatcher;
   }
 }
 
@@ -132,13 +154,14 @@ const popOneSetOfArrayBracketsFromTypeName = (typename: string): string => {
 const addTypeNameToResult = (
   result: any[] | object,
   __typename: string,
+  typePatcher: RestLink.FunctionalTypePatcher,
 ): any[] | object => {
   if (Array.isArray(result)) {
     const fixedTypename = popOneSetOfArrayBracketsFromTypeName(__typename);
     // Recursion needed for multi-dimensional arrays
-    return result.map(e => addTypeNameToResult(e, fixedTypename));
+    return result.map(e => addTypeNameToResult(e, fixedTypename, typePatcher));
   }
-  return { ...result, __typename };
+  return typePatcher(result, __typename, typePatcher);
 };
 
 const getURIFromEndpoints = (
@@ -332,6 +355,7 @@ interface RequestContext {
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  typePatcher: RestLink.FunctionalTypePatcher;
 }
 
 const resolver: Resolver = async (
@@ -360,6 +384,7 @@ const resolver: Resolver = async (
     headers,
     customFetch,
     operationType,
+    typePatcher,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
   const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
@@ -424,7 +449,7 @@ const resolver: Resolver = async (
       body,
     })
       .then(res => res.json())
-      .then(result => addTypeNameToResult(result, type));
+      .then(result => addTypeNameToResult(result, type, typePatcher));
   } catch (error) {
     throw error;
   }
@@ -443,6 +468,7 @@ export class RestLink extends ApolloLink {
   private headers: Headers;
   private fieldNameNormalizer: RestLink.FieldNameNormalizer;
   private fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  private typePatcher: RestLink.FunctionalTypePatcher;
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
 
@@ -452,6 +478,7 @@ export class RestLink extends ApolloLink {
     headers,
     fieldNameNormalizer,
     fieldNameDenormalizer,
+    typePatcher,
     customFetch,
     credentials,
   }: RestLink.Options) {
@@ -478,6 +505,42 @@ export class RestLink extends ApolloLink {
     if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
       console.warn(
         'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
+      );
+    }
+
+    if (typePatcher == null) {
+      this.typePatcher = (result, __typename, _2) => {
+        return { __typename, ...result };
+      };
+    } else if (
+      !Array.isArray(typePatcher) &&
+      typeof typePatcher === 'object' &&
+      Object.keys(typePatcher)
+        .map(key => typePatcher[key])
+        .reduce(
+          // Make sure all of the values are patcher-functions
+          (current, patcher) => current && typeof patcher === 'function',
+          true,
+        )
+    ) {
+      const table: RestLink.TypePatcherTable = typePatcher;
+      this.typePatcher = (
+        data: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (Array.isArray(data)) {
+          return data.map(d => patchDeeper(d, outerType, patchDeeper));
+        }
+        const subPatcher = table[outerType] || (result => result);
+        return {
+          __typename: outerType || data.__typename,
+          ...subPatcher(data, outerType, patchDeeper),
+        };
+      };
+    } else {
+      throw new Error(
+        'RestLink was configured with a typePatcher of invalid type!',
       );
     }
 
@@ -547,6 +610,7 @@ export class RestLink extends ApolloLink {
           customFetch: this.customFetch,
           operationType,
           fieldNameDenormalizer: this.fieldNameDenormalizer,
+          typePatcher: this.typePatcher,
         },
         variables,
         resolverOptions,

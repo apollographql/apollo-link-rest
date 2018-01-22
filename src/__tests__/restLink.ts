@@ -6,8 +6,8 @@ import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
 
-import { RestLink } from '../';
 import {
+  RestLink,
   validateRequestMethodForOperationType,
   normalizeHeaders,
 } from '../restLink';
@@ -42,6 +42,40 @@ describe('Configuration', () => {
       expect.assertions(1);
       expect(() => {
         new RestLink({ uri: '/correct', endpoints: { '': '/mismatched' } });
+      }).toThrow();
+    });
+
+    it('throws when invalid typePatchers', async () => {
+      expect.assertions(4);
+      // If using typescript, the typescript compiler protects us against allowing this.
+      // but if people use javascript or force it, we want exceptions to be thrown.
+      const pretendItsJavascript = (arg: any): any => arg;
+
+      expect(() => {
+        new RestLink({
+          uri: '/correct',
+          typePatcher: pretendItsJavascript(-1),
+        });
+      }).toThrow();
+      expect(() => {
+        new RestLink({
+          uri: '/correct',
+          typePatcher: pretendItsJavascript('fail'),
+        });
+      }).toThrow();
+      expect(() => {
+        new RestLink({
+          uri: '/correct',
+          typePatcher: pretendItsJavascript([]),
+        });
+      }).toThrow();
+      expect(() => {
+        new RestLink({
+          uri: '/correct',
+          typePatcher: pretendItsJavascript({
+            key: 'my values are not functions',
+          }),
+        });
       }).toThrow();
     });
 
@@ -269,6 +303,191 @@ describe('Configuration', () => {
     });
   });
 });
+describe('Complex responses need nested __typename insertions', () => {
+  it('can configure typename by providing a custom type-patcher table', async () => {
+    expect.assertions(1);
+
+    const patchIfExists = (
+      data: any,
+      key: string,
+      __typename: string,
+      patcher: RestLink.FunctionalTypePatcher,
+    ) => {
+      const value = data[key];
+      if (value == null) {
+        return {};
+      }
+      const result = { [key]: patcher(value, __typename, patcher) };
+      return result;
+    };
+    const typePatcher: RestLink.TypePatcherTable = {
+      Outer: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+          ...patchIfExists(
+            obj,
+            'simpleDoubleNesting',
+            'SimpleDoubleNesting',
+            patchDeeper,
+          ),
+          ...patchIfExists(obj, 'nestedArrays', 'NestedArrays', patchDeeper),
+        };
+      },
+      Inner1: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper),
+        };
+      },
+      SimpleDoubleNesting: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+        };
+      },
+      NestedArrays: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+
+        return {
+          ...obj,
+          ...patchIfExists(
+            obj,
+            'singlyArray',
+            'SinglyNestedArrayEntry',
+            patchDeeper,
+          ),
+          ...patchIfExists(
+            obj,
+            'doublyNestedArray',
+            'DoublyNestedArrayEntry',
+            patchDeeper,
+          ),
+        };
+      },
+    };
+
+    const link = new RestLink({ uri: '/api', typePatcher });
+    const root = {
+      id: '1',
+      inner1: { data: 'outer.inner1', reused: { id: 1 } },
+      simpleDoubleNesting: {
+        data: 'dd',
+        inner1: { data: 'outer.SDN.inner1', reused: { id: 2 } },
+      },
+      nestedArrays: {
+        unrelatedArray: ['string', 10],
+        singlyArray: [{ data: 'entry!' }],
+        doublyNestedArray: [[{ data: 'inception.entry!' }]],
+      },
+    };
+    const rootTyped = {
+      __typename: 'Outer',
+      id: '1',
+      inner1: {
+        __typename: 'Inner1',
+        data: 'outer.inner1',
+        reused: { __typename: 'Reused', id: 1 },
+      },
+      simpleDoubleNesting: {
+        __typename: 'SimpleDoubleNesting',
+        data: 'dd',
+        inner1: {
+          __typename: 'Inner1',
+          data: 'outer.SDN.inner1',
+          reused: { __typename: 'Reused', id: 2 },
+        },
+      },
+      nestedArrays: {
+        __typename: 'NestedArrays',
+        unrelatedArray: ['string', 10],
+        singlyArray: [{ __typename: 'SinglyNestedArrayEntry', data: 'entry!' }],
+        doublyNestedArray: [
+          [
+            {
+              __typename: 'DoublyNestedArrayEntry',
+              data: 'inception.entry!',
+            },
+          ],
+        ],
+      },
+    };
+
+    fetchMock.get('/api/outer/1', root);
+
+    const someQuery = gql`
+      query someQuery {
+        outer @rest(type: "Outer", path: "/outer/1") {
+          id
+          inner1 {
+            data
+            reused {
+              id
+            }
+          }
+          simpleDoubleNesting {
+            data
+            inner1 {
+              data
+              reused {
+                id
+              }
+            }
+          }
+          nestedArrays {
+            unrelatedArray
+            singlyArray {
+              data
+            }
+            doublyNestedArray {
+              data
+            }
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'someOperation',
+        query: someQuery,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      outer: rootTyped,
+    });
+  });
+});
 
 describe('Query single call', () => {
   afterEach(() => {
@@ -368,8 +587,13 @@ describe('Query single call', () => {
       ...tag,
       __typename: 'Tag',
     }));
-    const keywordGroupsWithTypeName = keywordGroups.map(kg => kg.map(element=>({...element, __typename: 'Keyword'})));
-    expect(data).toMatchObject({ tags: tagsWithTypeName, keywordGroups: keywordGroupsWithTypeName });
+    const keywordGroupsWithTypeName = keywordGroups.map(kg =>
+      kg.map(element => ({ ...element, __typename: 'Keyword' })),
+    );
+    expect(data).toMatchObject({
+      tags: tagsWithTypeName,
+      keywordGroups: keywordGroupsWithTypeName,
+    });
   });
 
   it('can filter the query result', async () => {
