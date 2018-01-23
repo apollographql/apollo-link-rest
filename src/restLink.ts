@@ -446,7 +446,7 @@ const resolver: Resolver = async (
       credentials,
       method,
       headers,
-      body,
+      body: body && JSON.stringify(body),
     })
       .then(res => res.json())
       .then(result => addTypeNameToResult(result, type, typePatcher));

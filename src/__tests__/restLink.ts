@@ -1565,7 +1565,7 @@ describe('Mutation', () => {
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: expect.objectContaining(intermediatePost),
+          body: JSON.stringify(intermediatePost),
         }),
       );
     });
@@ -1622,7 +1622,7 @@ describe('Mutation', () => {
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: expect.objectContaining(intermediatePost),
+          body: JSON.stringify(intermediatePost),
         }),
       );
     });
@@ -1684,7 +1684,7 @@ describe('Mutation', () => {
       expect(requestCall[1]).toEqual(
         expect.objectContaining({ method: 'POST' }),
       );
-      expect(requestCall[1].body).toMatchObject(post);
+      expect(requestCall[1].body).toEqual(JSON.stringify(post));
     });
 
     it('respects bodyKey for mutations', async () => {
@@ -1782,7 +1782,7 @@ describe('Mutation', () => {
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: expect.stringMatching(
+          body: JSON.stringify(
             fakeEncryption({ input: { title: post.title } }),
           ),
         }),
