@@ -1631,7 +1631,7 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
-    it('builds request body containing Strings/Objects/Arrays types without chainging their types', async () => {
+    it('builds request body containing Strings/Objects/Arrays types without changing their types', async () => {
       // tests convertObjectKeys functionality
       // see: https://github.com/apollographql/apollo-link-rest/issues/45
       expect.assertions(3);
