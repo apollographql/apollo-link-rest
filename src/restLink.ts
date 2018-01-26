@@ -14,6 +14,8 @@ import {
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
 
+const toUpperCamelCase = require('uppercamelcase');
+
 export namespace RestLink {
   export type URI = string;
 
@@ -567,10 +569,10 @@ export class RestLink extends ApolloLink {
             const patched = Object.keys(result)
               .filter(key => typeof data[key] === 'object')
               .reduce((previousValue, key) => {
-                const pascalCase = key.charAt(0).toUpperCase() + key.slice(1);
+                const typename = toUpperCamelCase(key);
                 return {
                   ...previousValue,
-                  [key]: patchDeeper(data[key], pascalCase, patchDeeper),
+                  [key]: patchDeeper(data[key], typename, patchDeeper),
                 };
               }, {});
 
