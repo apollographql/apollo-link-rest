@@ -358,6 +358,17 @@ interface RequestContext {
   typePatcher: RestLink.FunctionalTypePatcher;
 }
 
+const addTypeToNode = (node, typename) => {
+  if (!Array.isArray(node)) {
+    node['__typename'] = typename;
+    return node;
+  }
+
+  return node.map(item => {
+    return addTypeToNode(item, typename);
+  });
+};
+
 const resolver: Resolver = async (
   fieldName: string,
   root: any,
@@ -370,10 +381,17 @@ const resolver: Resolver = async (
     exportVariables = {};
   }
 
-  const currentNode = (root || {})[resultKey];
+  let currentNode = (root || {})[resultKey];
   if (root && directives && directives.export) {
     exportVariables[directives.export.as] = currentNode;
   }
+
+  const isATypeCall = directives && directives.type;
+
+  if (!isLeaf && isATypeCall) {
+    currentNode = addTypeToNode(currentNode, directives.type.name);
+  }
+
   const isNotARestCall = !directives || !directives.rest;
   if (isLeaf || isNotARestCall) {
     return currentNode;

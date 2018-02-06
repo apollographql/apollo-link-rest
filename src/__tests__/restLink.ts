@@ -487,6 +487,324 @@ describe('Complex responses need nested __typename insertions', () => {
       outer: rootTyped,
     });
   });
+
+  it('can configure typename by using @type annotations', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+    const root = {
+      id: '1',
+      inner1: { data: 'outer.inner1', reused: { id: 1 } },
+      simpleDoubleNesting: {
+        data: 'dd',
+        inner1: { data: 'outer.SDN.inner1', reused: { id: 2 } },
+      },
+      nestedArrays: {
+        unrelatedArray: ['string', 10],
+        singlyArray: [{ data: 'entry!' }],
+        doublyNestedArray: [[{ data: 'inception.entry!' }]],
+      },
+    };
+    const rootTyped = {
+      __typename: 'Outer',
+      id: '1',
+      inner1: {
+        __typename: 'Inner1',
+        data: 'outer.inner1',
+        reused: { __typename: 'Reused', id: 1 },
+      },
+      simpleDoubleNesting: {
+        __typename: 'SimpleDoubleNesting',
+        data: 'dd',
+        inner1: {
+          __typename: 'Inner1',
+          data: 'outer.SDN.inner1',
+          reused: { __typename: 'Reused', id: 2 },
+        },
+      },
+      nestedArrays: {
+        __typename: 'NestedArrays',
+        unrelatedArray: ['string', 10],
+        singlyArray: [{ __typename: 'SinglyNestedArrayEntry', data: 'entry!' }],
+        doublyNestedArray: [
+          [
+            {
+              __typename: 'DoublyNestedArrayEntry',
+              data: 'inception.entry!',
+            },
+          ],
+        ],
+      },
+    };
+
+    fetchMock.get('/api/outer/2', root);
+
+    const someQuery = gql`
+      query someQuery {
+        outer @rest(type: "Outer", path: "/outer/2") {
+          id
+          inner1 @type(name: "Inner1") {
+            data
+            reused @type(name: "Reused") {
+              id
+            }
+          }
+          simpleDoubleNesting @type(name: "SimpleDoubleNesting") {
+            data
+            inner1 @type(name: "Inner1") {
+              data
+              reused @type(name: "Reused") {
+                id
+              }
+            }
+          }
+          nestedArrays @type(name: "NestedArrays") {
+            unrelatedArray
+            singlyArray @type(name: "SinglyNestedArrayEntry") {
+              data
+            }
+            doublyNestedArray @type(name: "DoublyNestedArrayEntry") {
+              data
+            }
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'someOperation',
+        query: someQuery,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      outer: rootTyped,
+    });
+  });
+
+  it('can configure typename by providing @type annotations and a custom type-patcher table', async () => {
+    expect.assertions(1);
+
+    const patchIfExists = (
+      data: any,
+      key: string,
+      __typename: string,
+      patcher: RestLink.FunctionalTypePatcher,
+    ) => {
+      const value = data[key];
+      if (value == null) {
+        return {};
+      }
+      const result = { [key]: patcher(value, __typename, patcher) };
+      return result;
+    };
+    const typePatcher: RestLink.TypePatcherTable = {
+      Outer: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+          ...patchIfExists(
+            obj,
+            'simpleDoubleNesting',
+            'SimpleDoubleNesting',
+            patchDeeper,
+          ),
+          ...patchIfExists(obj, 'nestedArrays', 'NestedArrays', patchDeeper),
+        };
+      },
+      Inner1: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper),
+        };
+      },
+      SimpleDoubleNesting: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+        };
+      },
+      NestedArrays: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+
+        return {
+          ...obj,
+          ...patchIfExists(
+            obj,
+            'singlyArray',
+            'SinglyNestedArrayEntry',
+            patchDeeper,
+          ),
+          ...patchIfExists(
+            obj,
+            'doublyNestedArray',
+            'DoublyNestedArrayEntry',
+            patchDeeper,
+          ),
+        };
+      },
+      InnerAnnotated: (
+        obj: any,
+        outerType: string,
+        patchDeeper: RestLink.FunctionalTypePatcher,
+      ) => {
+        if (obj == null) {
+          return obj;
+        }
+        return {
+          ...obj,
+          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper),
+        };
+      },
+    };
+
+    const link = new RestLink({ uri: '/api', typePatcher });
+    const root = {
+      id: '1',
+      inner1: { data: 'outer.inner1', reused: { id: 1 } },
+      simpleDoubleNesting: {
+        data: 'dd',
+        inner1: { data: 'outer.SDN.inner1', reused: { id: 2 } },
+      },
+      simpleDoubleNestingAnnotated: {
+        data: 'dd',
+        innerAnnotated: { data: 'inner', reused: { id: 3 } },
+      },
+      nestedArrays: {
+        unrelatedArray: ['string', 10],
+        singlyArray: [{ data: 'entry!' }],
+        doublyNestedArray: [[{ data: 'inception.entry!' }]],
+      },
+    };
+    const rootTyped = {
+      __typename: 'Outer',
+      id: '1',
+      inner1: {
+        __typename: 'Inner1',
+        data: 'outer.inner1',
+        reused: { __typename: 'Reused', id: 1 },
+      },
+      simpleDoubleNesting: {
+        __typename: 'SimpleDoubleNesting',
+        data: 'dd',
+        inner1: {
+          __typename: 'Inner1',
+          data: 'outer.SDN.inner1',
+          reused: { __typename: 'Reused', id: 2 },
+        },
+      },
+      simpleDoubleNestingAnnotated: {
+        __typename: 'SimpleDoubleNestingAnnotated',
+        data: 'dd',
+        innerAnnotated: {
+          __typename: 'InnerAnnotated',
+          data: 'inner',
+          reused: {
+            __typename: 'Reused',
+            id: 3,
+          },
+        },
+      },
+      nestedArrays: {
+        __typename: 'NestedArrays',
+        unrelatedArray: ['string', 10],
+        singlyArray: [{ __typename: 'SinglyNestedArrayEntry', data: 'entry!' }],
+        doublyNestedArray: [
+          [
+            {
+              __typename: 'DoublyNestedArrayEntry',
+              data: 'inception.entry!',
+            },
+          ],
+        ],
+      },
+    };
+
+    fetchMock.get('/api/outer/3', root);
+
+    const someQuery = gql`
+      query someQuery {
+        outer @rest(type: "Outer", path: "/outer/3") {
+          id
+          inner1 {
+            data
+            reused {
+              id
+            }
+          }
+          simpleDoubleNesting {
+            data
+            inner1 {
+              data
+              reused {
+                id
+              }
+            }
+          }
+          simpleDoubleNestingAnnotated
+            @type(name: "SimpleDoubleNestingAnnotated") {
+            data
+            innerAnnotated @type(name: "InnerAnnotated") {
+              data
+              reused {
+                id
+              }
+            }
+          }
+          nestedArrays {
+            unrelatedArray
+            singlyArray {
+              data
+            }
+            doublyNestedArray {
+              data
+            }
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'someOperation',
+        query: someQuery,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      outer: rootTyped,
+    });
+  });
 });
 
 describe('Query single call', () => {
