@@ -359,6 +359,10 @@ interface RequestContext {
 }
 
 const addTypeToNode = (node, typename) => {
+  if (node === null || node === undefined || typeof node !== 'object') {
+    return node;
+  }
+
   if (!Array.isArray(node)) {
     node['__typename'] = typename;
     return node;
