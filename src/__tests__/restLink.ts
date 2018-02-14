@@ -1,6 +1,7 @@
 import { execute, makePromise, ApolloLink } from 'apollo-link';
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
+import { onError } from 'apollo-link-error';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
@@ -1957,5 +1958,39 @@ describe('Apollo client integration', () => {
     });
 
     expect(data.post).toBeDefined();
+  });
+
+  it('can catch HTTP Status errors', async () => {
+    const link = new RestLink({ uri: '/api' });
+
+    // setop onError link
+    const errorLink = onError(opts => {
+      const { networkError } = opts;
+      if (networkError) console.log(`[Network error]: ${networkError}`);
+    });
+    const combinedLink = ApolloLink.from([errorLink, link]);
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: combinedLink,
+    });
+
+    fetchMock.mock('/api/post/401', {
+      status: 400,
+      body: { id: 1 },
+    });
+    const postTagExport = gql`
+      query {
+        post @rest(type: "Post", path: "/post/401") {
+          id
+        }
+      }
+    `;
+
+    expect(async () => {
+      return await client.query({
+        query: postTagExport,
+      });
+    }).rejects.toThrow();
   });
 });

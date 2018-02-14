@@ -326,6 +326,25 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
+//Used for any Error for data from the server
+//on a request with a Status >= 300
+//response contains no data or errors
+type ServerError = Error & {
+  response: Response;
+  result: Record<string, any>;
+  statusCode: number;
+};
+
+const throwServerError = (response, result, message) => {
+  const error = new Error(message) as ServerError;
+
+  error.response = response;
+  error.statusCode = response.status;
+  error.result = result;
+
+  throw error;
+};
+
 let exportVariables = {};
 
 /** Apollo-Link getContext, provided from the user & mutated by upstream links */
@@ -441,13 +460,23 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
       headers,
       body: body && JSON.stringify(body),
     })
+      .then(res => {
+        if (res.status >= 300) {
+          //Network error
+          throwServerError(
+            res,
+            res.text(),
+            `Response not successful: Received status code ${res.status}`,
+          );
+        }
+        return res;
+      })
       .then(res => res.json())
       .then(result => addTypeNameToResult(result, type, typePatcher));
   } catch (error) {
@@ -620,6 +649,10 @@ export class RestLink extends ApolloLink {
           observer.complete();
         })
         .catch(err => {
+          if (err.name === 'AbortError') return;
+          if (err.result && err.result.errors) {
+            observer.next(err.result);
+          }
           observer.error(err);
         });
     });
