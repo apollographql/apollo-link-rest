@@ -1960,7 +1960,7 @@ describe('Apollo client integration', () => {
     expect(data.post).toBeDefined();
   });
 
-  it('can catch HTTP Status errors', async () => {
+  it('can catch HTTP Status errors', async done => {
     const link = new RestLink({ uri: '/api' });
 
     // setup onError link
@@ -1975,22 +1975,53 @@ describe('Apollo client integration', () => {
       link: combinedLink,
     });
 
-    fetchMock.mock('/api/post/401', {
+    fetchMock.mock('/api/post/1', {
       status: 400,
       body: { id: 1 },
     });
-    const postTagExport = gql`
-      query {
-        post @rest(type: "Post", path: "/post/401") {
-          id
-        }
-      }
-    `;
 
-    expect(async () => {
-      return await client.query({
-        query: postTagExport,
+    try {
+      const result = await client.query({
+        query: sampleQuery,
       });
-    }).rejects.toThrow();
+      done.fail('query should throw a network error');
+    } catch (error) {
+      done();
+    }
+  });
+
+  it('supports being cancelled and does not throw', done => {
+    class AbortError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = message;
+      }
+    }
+    const customFetch = () =>
+      new Promise((_, reject) => {
+        reject(new AbortError('AbortError'));
+      });
+
+    const link = new RestLink({
+      uri: '/api',
+      customFetch: customFetch as any,
+    });
+
+    const sub = execute(link, { query: sampleQuery }).subscribe({
+      next: result => {
+        done.fail('result should not have been called');
+      },
+      error: e => {
+        done.fail(e);
+      },
+      complete: () => {
+        done.fail('complete should not have been called');
+      },
+    });
+
+    setTimeout(() => {
+      sub.unsubscribe();
+      done();
+    }, 0);
   });
 });
