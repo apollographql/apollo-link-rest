@@ -1963,7 +1963,7 @@ describe('Apollo client integration', () => {
   it('can catch HTTP Status errors', async () => {
     const link = new RestLink({ uri: '/api' });
 
-    // setop onError link
+    // setup onError link
     const errorLink = onError(opts => {
       const { networkError } = opts;
       if (networkError) console.log(`[Network error]: ${networkError}`);
