@@ -772,6 +772,85 @@ describe('Query single call', () => {
       post: { ...postWithNest, __typename: 'Post' },
     });
   });
+
+  it('can build the path using pathBuilder', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+    const posts = [{ id: '1', title: 'Love apollo' }];
+    fetchMock.get('/api/posts?status=published', posts);
+
+    const postTitleQuery = gql`
+      query postTitle($pathFunction: any, $status: String) {
+        posts(status: $status) @rest(type: "Post", pathBuilder: $pathFunction) {
+          id
+          title
+        }
+      }
+    `;
+
+    function createPostsPath(variables) {
+      const qs = Object.keys(
+        variables,
+      ).reduce((acc: string, key: string): string => {
+        if (variables[key] === null || variables[key] === undefined) {
+          return acc;
+        }
+        if (acc === '') {
+          return '?' + key + '=' + encodeURIComponent(String(variables[key]));
+        }
+        return (
+          acc + '&' + key + '=' + encodeURIComponent(String(variables[key]))
+        );
+      }, '');
+      return '/posts' + qs;
+    }
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTitleQuery,
+        variables: {
+          status: 'published',
+          pathFunction: createPostsPath,
+        },
+      }),
+    );
+
+    expect(data).toMatchObject({
+      posts: [{ ...posts[0], __typename: 'Post' }],
+    });
+  });
+
+  it('throws if missing both path and pathBuilder', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/post/1', post);
+
+    const postTitleQuery = gql`
+      query postTitle {
+        post @rest(type: "Post") {
+          id
+          title
+        }
+      }
+    `;
+
+    try {
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+        }),
+      );
+    } catch (error) {
+      expect(error.message).toBe(
+        'Parmeter "path" or "pathBuilder" must be set in @rest directive',
+      );
+    }
+  });
 });
 
 describe('Query multiple calls', () => {

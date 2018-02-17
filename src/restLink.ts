@@ -107,12 +107,18 @@ export namespace RestLink {
     /** What GraphQL type to name the response */
     type?: string;
     /** What path to use */
-    path: string;
+    path?: string;
     /**
      * What endpoint to select from the map of endpoints available to this link.
      * @default `RestLink.endpoints[DEFAULT_ENDPOINT_KEY]`
      */
     endpoint?: string;
+    /**
+     * Optional function that constructs a request path out of the Environmental state
+     * when processing this @rest(...) call. 
+     * @default function that produces a request path string from the args.
+     */
+    pathBuilder?: (args: object) => string;
     /**
      * Optional method that constructs a RequestBody out of the Environmental state
      * when processing this @rest(...) call. 
@@ -387,19 +393,36 @@ const resolver: Resolver = async (
     typePatcher,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
-  const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
+  let {
+    path,
+    endpoint,
+    pathBuilder,
+  } = directives.rest as RestLink.DirectiveOptions;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
     const argsWithExport = { ...args, ...exportVariables };
-    let pathWithParams = Object.keys(argsWithExport).reduce(
-      (acc, e) => replaceParam(acc, e, argsWithExport[e]),
-      path,
-    );
-    if (pathWithParams.includes(':')) {
-      throw new Error(
-        'Missing params to run query, specify it in the query params or use an export directive',
-      );
+
+    if (!pathBuilder) {
+      if (!path) {
+        throw new Error(
+          'Parmeter "path" or "pathBuilder" must be set in @rest directive',
+        );
+      }
+      pathBuilder = (args: object): string => {
+        const pathWithParams = Object.keys(args).reduce(
+          (acc, e) => replaceParam(acc, e, args[e]),
+          path,
+        );
+        if (pathWithParams.includes(':')) {
+          throw new Error(
+            'Missing params to run query, specify it in the query params or use an export directive',
+          );
+        }
+        return pathWithParams;
+      };
     }
+    const pathWithParams = pathBuilder(argsWithExport);
+
     let {
       method,
       type,
