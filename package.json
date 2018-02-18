@@ -87,7 +87,7 @@
     {
       "name": "apollo-link-rest",
       "path": "./lib/bundle.min.js",
-      "maxSize": "4 kb"
+      "maxSize": "5 kb"
     }
   ],
   "lint-staged": {
