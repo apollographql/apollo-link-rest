@@ -1981,7 +1981,7 @@ describe('Apollo client integration', () => {
     });
 
     try {
-      const result = await client.query({
+      await client.query({
         query: sampleQuery,
       });
       done.fail('query should throw a network error');
@@ -2008,7 +2008,7 @@ describe('Apollo client integration', () => {
     });
 
     const sub = execute(link, { query: sampleQuery }).subscribe({
-      next: result => {
+      next: () => {
         done.fail('result should not have been called');
       },
       error: e => {
