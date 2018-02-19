@@ -2,6 +2,10 @@
 
 ## Versions
 
+### v0.next
+
+- Feature: Support Handling Non-success HTTP Status Codes
+
 ### v0.1.0
 
 Dropping the alpha tag, but keeping the pre-1.0 nature of this project!
