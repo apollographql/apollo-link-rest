@@ -5,6 +5,7 @@
 ### v0.next
 
 - Feature: Support Handling Non-success HTTP Status Codes
+- Feature: Dynamic Paths & Query building using `pathBuilder`
 
 ### v0.1.0
 
