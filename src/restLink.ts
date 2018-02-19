@@ -48,6 +48,17 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
+  /**
+   * Used for any Error from the server when requests:
+   * - terminate with HTTP Status >= 300
+   * - and the response contains no data or errors
+   */
+  export type ServerError = Error & {
+    response: Response;
+    result: Promise<string>;
+    statusCode: number;
+  };
+
   export type Options = {
     /**
      * The URI to use when fetching operations.
@@ -326,16 +337,17 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
-//Used for any Error for data from the server
-//on a request with a Status >= 300
-//response contains no data or errors
-type ServerError = Error & {
-  response: Response;
-  result: Record<string, any>;
-  statusCode: number;
-};
-
-const throwServerError = (response, result, message) => {
+/**
+ * Utility to build & throw a JS Error from a "failed" REST-response
+ * @param response: HTTP Response object for this request
+ * @param result: Promise that will render the body of the response
+ * @param message: Human-facing error message
+ */
+const rethrowServerSideError = (
+  response: Response,
+  result: Promise<string>,
+  message: string,
+) => {
   const error = new Error(message) as ServerError;
 
   error.response = response;
@@ -468,8 +480,9 @@ const resolver: Resolver = async (
     })
       .then(res => {
         if (res.status >= 300) {
-          //Network error
-          throwServerError(
+          // Throw a JSError, that will be available under the
+          // "Network error" category in apollo-link-error
+          rethrowServerSideError(
             res,
             res.text(),
             `Response not successful: Received status code ${res.status}`,

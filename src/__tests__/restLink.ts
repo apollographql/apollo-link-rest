@@ -1963,10 +1963,16 @@ describe('Apollo client integration', () => {
   it('can catch HTTP Status errors', async done => {
     const link = new RestLink({ uri: '/api' });
 
+    const status = 404;
+
     // setup onError link
     const errorLink = onError(opts => {
       const { networkError } = opts;
-      if (networkError) console.log(`[Network error]: ${networkError}`);
+      if (networkError != null) {
+        //console.debug(`[Network error]: ${networkError}`);
+        const { statusCode } = networkError as RestLink.ServerError;
+        expect(statusCode).toEqual(status);
+      }
     });
     const combinedLink = ApolloLink.from([errorLink, link]);
 
@@ -1976,7 +1982,7 @@ describe('Apollo client integration', () => {
     });
 
     fetchMock.mock('/api/post/1', {
-      status: 400,
+      status,
       body: { id: 1 },
     });
 
