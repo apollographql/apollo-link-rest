@@ -52,6 +52,7 @@
     "@types/node": "^8.0.53",
     "apollo-cache-inmemory": "^1.1.4",
     "apollo-client": "^2.0.4",
+    "apollo-link-error": "^1.0.5",
     "apollo-link-http": "1.2.0",
     "browserify": "14.5.0",
     "bundlesize": "0.15.3",
