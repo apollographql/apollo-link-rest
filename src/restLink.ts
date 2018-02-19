@@ -106,7 +106,10 @@ export namespace RestLink {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     /** What GraphQL type to name the response */
     type?: string;
-    /** What path to use */
+    /**
+     * What path (including query) to use
+     * - @optional if you provide @see DirectiveOptions.pathBuilder
+     */
     path?: string;
     /**
      * What endpoint to select from the map of endpoints available to this link.
@@ -114,9 +117,12 @@ export namespace RestLink {
      */
     endpoint?: string;
     /**
-     * Optional function that constructs a request path out of the Environmental state
-     * when processing this @rest(...) call. 
-     * @default function that produces a request path string from the args.
+     * Function that constructs a request path out of the Environmental
+     *  state when processing this @rest(...) call. 
+     * 
+     * - @optional if you provide: @see DirectiveOptions.path
+     * - **note**: this does not do any URI encoding on the result, so be aware if you're
+     *  making a query-string!
      */
     pathBuilder?: (args: object) => string;
     /**
@@ -402,12 +408,19 @@ const resolver: Resolver = async (
   try {
     const argsWithExport = { ...args, ...exportVariables };
 
+    const bothPathsProvided = path != null && pathBuilder != null;
+    const neitherPathsProvided = path == null && pathBuilder == null;
+
+    if (bothPathsProvided || neitherPathsProvided) {
+      const pathBuilderState = bothPathsProvided
+        ? 'both, please remove one!'
+        : 'neither, please add one!';
+      throw new Error(
+        `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
+          `This request had ${pathBuilderState}`,
+      );
+    }
     if (!pathBuilder) {
-      if (!path) {
-        throw new Error(
-          'Parmeter "path" or "pathBuilder" must be set in @rest directive',
-        );
-      }
       pathBuilder = (args: object): string => {
         const pathWithParams = Object.keys(args).reduce(
           (acc, e) => replaceParam(acc, e, args[e]),

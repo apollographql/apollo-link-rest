@@ -22,8 +22,12 @@ const sampleQuery = gql`
 
 type Result = { [index: string]: any };
 
-describe('Configuration', () => {
-  describe('Errors', () => {
+describe('Configuration', async () => {
+  describe('Errors', async () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+
     it('throws without any config', () => {
       expect.assertions(3);
 
@@ -43,6 +47,71 @@ describe('Configuration', () => {
       expect(() => {
         new RestLink({ uri: '/correct', endpoints: { '': '/mismatched' } });
       }).toThrow();
+    });
+
+    it('throws if missing both path and pathBuilder', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post @rest(type: "Post") {
+            id
+            title
+          }
+        }
+      `;
+
+      try {
+        await makePromise<Result>(
+          execute(link, {
+            operationName: 'postTitle',
+            query: postTitleQuery,
+          }),
+        );
+      } catch (error) {
+        expect(error.message).toBe(
+          `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
+            `This request had neither, please add one!`,
+        );
+      }
+    });
+
+    it('throws if both path and pathBuilder are simultaneously provided', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle($pathBuilder: any) {
+          post @rest(type: "Post", path: "/post/1", pathBuilder: $pathBuilder) {
+            id
+            title
+          }
+        }
+      `;
+
+      try {
+        await makePromise<Result>(
+          execute(link, {
+            operationName: 'postTitle',
+            query: postTitleQuery,
+            variables: {
+              pathBuilder: (args: any) => '/whatever',
+            },
+          }),
+        );
+      } catch (error) {
+        expect(error.message).toBe(
+          `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
+            `This request had both, please remove one!`,
+        );
+      }
     });
 
     it('throws when invalid typePatchers', async () => {
@@ -94,7 +163,7 @@ describe('Configuration', () => {
     });
   });
 
-  describe('Field name normalizer', () => {
+  describe('Field name normalizer', async () => {
     afterEach(() => {
       fetchMock.restore();
     });
@@ -821,36 +890,6 @@ describe('Query single call', () => {
       posts: [{ ...posts[0], __typename: 'Post' }],
     });
   });
-
-  it('throws if missing both path and pathBuilder', async () => {
-    expect.assertions(1);
-
-    const link = new RestLink({ uri: '/api' });
-    const post = { id: '1', title: 'Love apollo' };
-    fetchMock.get('/api/post/1', post);
-
-    const postTitleQuery = gql`
-      query postTitle {
-        post @rest(type: "Post") {
-          id
-          title
-        }
-      }
-    `;
-
-    try {
-      await makePromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-        }),
-      );
-    } catch (error) {
-      expect(error.message).toBe(
-        'Parmeter "path" or "pathBuilder" must be set in @rest directive',
-      );
-    }
-  });
 });
 
 describe('Query multiple calls', () => {
@@ -860,7 +899,6 @@ describe('Query multiple calls', () => {
 
   it('can run a query with multiple rest calls', async () => {
     expect.assertions(2);
-    ``;
 
     const link = new RestLink({ uri: '/api' });
 
