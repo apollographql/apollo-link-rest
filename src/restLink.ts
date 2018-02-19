@@ -48,6 +48,17 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
+  /**
+   * Used for any Error from the server when requests:
+   * - terminate with HTTP Status >= 300
+   * - and the response contains no data or errors
+   */
+  export type ServerError = Error & {
+    response: Response;
+    result: Promise<string>;
+    statusCode: number;
+  };
+
   export type Options = {
     /**
      * The URI to use when fetching operations.
@@ -338,6 +349,26 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
+/**
+ * Utility to build & throw a JS Error from a "failed" REST-response
+ * @param response: HTTP Response object for this request
+ * @param result: Promise that will render the body of the response
+ * @param message: Human-facing error message
+ */
+const rethrowServerSideError = (
+  response: Response,
+  result: Promise<string>,
+  message: string,
+) => {
+  const error = new Error(message) as ServerError;
+
+  error.response = response;
+  error.statusCode = response.status;
+  error.result = result;
+
+  throw error;
+};
+
 let exportVariables = {};
 
 /** Apollo-Link getContext, provided from the user & mutated by upstream links */
@@ -477,13 +508,24 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
       headers,
       body: body && JSON.stringify(body),
     })
+      .then(res => {
+        if (res.status >= 300) {
+          // Throw a JSError, that will be available under the
+          // "Network error" category in apollo-link-error
+          rethrowServerSideError(
+            res,
+            res.text(),
+            `Response not successful: Received status code ${res.status}`,
+          );
+        }
+        return res;
+      })
       .then(res => res.json())
       .then(result => addTypeNameToResult(result, type, typePatcher));
   } catch (error) {
@@ -656,6 +698,10 @@ export class RestLink extends ApolloLink {
           observer.complete();
         })
         .catch(err => {
+          if (err.name === 'AbortError') return;
+          if (err.result && err.result.errors) {
+            observer.next(err.result);
+          }
           observer.error(err);
         });
     });

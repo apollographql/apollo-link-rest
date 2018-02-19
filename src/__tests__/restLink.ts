@@ -1,6 +1,7 @@
 import { execute, makePromise, ApolloLink } from 'apollo-link';
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
+import { onError } from 'apollo-link-error';
 import gql from 'graphql-tag';
 import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
@@ -2074,5 +2075,76 @@ describe('Apollo client integration', () => {
     });
 
     expect(data.post).toBeDefined();
+  });
+
+  it('can catch HTTP Status errors', async done => {
+    const link = new RestLink({ uri: '/api' });
+
+    const status = 404;
+
+    // setup onError link
+    const errorLink = onError(opts => {
+      const { networkError } = opts;
+      if (networkError != null) {
+        //console.debug(`[Network error]: ${networkError}`);
+        const { statusCode } = networkError as RestLink.ServerError;
+        expect(statusCode).toEqual(status);
+      }
+    });
+    const combinedLink = ApolloLink.from([errorLink, link]);
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: combinedLink,
+    });
+
+    fetchMock.mock('/api/post/1', {
+      status,
+      body: { id: 1 },
+    });
+
+    try {
+      await client.query({
+        query: sampleQuery,
+      });
+      done.fail('query should throw a network error');
+    } catch (error) {
+      done();
+    }
+  });
+
+  it('supports being cancelled and does not throw', done => {
+    class AbortError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = message;
+      }
+    }
+    const customFetch = () =>
+      new Promise((_, reject) => {
+        reject(new AbortError('AbortError'));
+      });
+
+    const link = new RestLink({
+      uri: '/api',
+      customFetch: customFetch as any,
+    });
+
+    const sub = execute(link, { query: sampleQuery }).subscribe({
+      next: () => {
+        done.fail('result should not have been called');
+      },
+      error: e => {
+        done.fail(e);
+      },
+      complete: () => {
+        done.fail('complete should not have been called');
+      },
+    });
+
+    setTimeout(() => {
+      sub.unsubscribe();
+      done();
+    }, 0);
   });
 });
