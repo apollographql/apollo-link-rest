@@ -14,6 +14,8 @@ import {
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
 
+const toUpperCamelCase = require('uppercamelcase');
+
 export namespace RestLink {
   export type URI = string;
 
@@ -96,6 +98,11 @@ export namespace RestLink {
      *           And consider submitting alternate solutions to the problem!
      */
     typePatcher?: TypePatcherTable;
+
+    /**
+     * Boolean to allow automatically inference of nested objects' typenames
+     */
+    automaticallyInferTypenames?: boolean;
 
     /**
      * The credentials policy you want to use for the fetch call.
@@ -549,6 +556,7 @@ export class RestLink extends ApolloLink {
   private typePatcher: RestLink.FunctionalTypePatcher;
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
+  private automaticallyInferTypenames: boolean;
 
   constructor({
     uri,
@@ -559,11 +567,13 @@ export class RestLink extends ApolloLink {
     typePatcher,
     customFetch,
     credentials,
+    automaticallyInferTypenames,
   }: RestLink.Options) {
     super();
     const fallback = {};
     fallback[DEFAULT_ENDPOINT_KEY] = uri || '';
     this.endpoints = Object.assign({}, endpoints || fallback);
+    this.automaticallyInferTypenames = automaticallyInferTypenames;
 
     if (uri == null && endpoints == null) {
       throw new Error(
@@ -584,6 +594,10 @@ export class RestLink extends ApolloLink {
       console.warn(
         'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
       );
+    }
+
+    if (this.automaticallyInferTypenames && typePatcher == null) {
+      typePatcher = {};
     }
 
     if (typePatcher == null) {
@@ -608,9 +622,41 @@ export class RestLink extends ApolloLink {
         patchDeeper: RestLink.FunctionalTypePatcher,
       ) => {
         if (Array.isArray(data)) {
-          return data.map(d => patchDeeper(d, outerType, patchDeeper));
+          return data.map(
+            d =>
+              typeof d === 'object'
+                ? patchDeeper(d, outerType, patchDeeper)
+                : d,
+          );
         }
-        const subPatcher = table[outerType] || (result => result);
+
+        const subPatcher =
+          table[outerType] ||
+          (result => {
+            if (
+              !this.automaticallyInferTypenames ||
+              typeof result !== 'object'
+            ) {
+              return result;
+            }
+
+            if (!Array.isArray(result) && result.__typename === undefined) {
+              result.__typename = outerType;
+            }
+
+            const patched = Object.keys(result)
+              .filter(key => typeof data[key] === 'object')
+              .reduce((previousValue, key) => {
+                const typename = toUpperCamelCase(key);
+                return {
+                  ...previousValue,
+                  [key]: patchDeeper(data[key], typename, patchDeeper),
+                };
+              }, {});
+
+            return { ...result, ...patched };
+          });
+
         return {
           __typename: outerType || data.__typename,
           ...subPatcher(data, outerType, patchDeeper),
