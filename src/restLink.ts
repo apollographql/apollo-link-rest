@@ -360,7 +360,7 @@ const rethrowServerSideError = (
   result: Promise<string>,
   message: string,
 ) => {
-  const error = new Error(message) as ServerError;
+  const error = new Error(message) as RestLink.ServerError;
 
   error.response = response;
   error.statusCode = response.status;
