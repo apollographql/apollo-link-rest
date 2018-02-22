@@ -362,7 +362,7 @@ describe('Configuration', async () => {
         }
       `;
 
-      const { data } = await makePromise(
+      const { data } = await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitle,
@@ -1991,7 +1991,7 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTagExport,
