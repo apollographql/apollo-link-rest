@@ -2080,9 +2080,8 @@ describe('Apollo client integration', () => {
     expect(data.post).toBeDefined();
   });
 
-  it('treats absent response fields as optional', async () => {
+  it('treats absent response fields as optional', async done => {
     // Discovered in: https://github.com/apollographql/apollo-link-rest/issues/74
-    expect.assertions(2);
 
     const link = new RestLink({ uri: '/api' });
 
@@ -2121,6 +2120,51 @@ describe('Apollo client integration', () => {
       query: postTitleQuery,
     });
     expect(data2.post.unfairCriticism).toBeNull();
+
+    const errorLink = onError(opts => {
+      console.error(opts);
+      const { networkError, graphQLErrors } = opts;
+      expect(
+        networkError || (graphQLErrors && graphQLErrors.length > 0),
+      ).toBeTruthy();
+    });
+    const combinedLink = ApolloLink.from([
+      new RestLink({
+        uri: '/api',
+        typePatcher: {
+          Post: (
+            data: any,
+            outerType: string,
+            patchDeeper: RestLink.FunctionalTypePatcher,
+          ): any => {
+            // Let's make unfairCriticism a Required Field
+            if (data.unfairCriticism == null) {
+              throw new Error(
+                'Required Field: unfairCriticism missing in RESTResponse.',
+              );
+            }
+            return data;
+          },
+        },
+      }),
+      errorLink,
+    ]);
+    const client3 = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: combinedLink,
+    });
+    try {
+      const result = await client3.query({
+        query: postTitleQuery,
+      });
+      const { errors } = result;
+      if (errors && errors.length > 0) {
+        throw new Error('All is well, errors were thrown as expected');
+      }
+      done.fail('query should throw some sort of error');
+    } catch (error) {
+      done();
+    }
   });
 
   it('can catch HTTP Status errors', async done => {

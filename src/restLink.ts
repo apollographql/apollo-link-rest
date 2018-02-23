@@ -105,6 +105,9 @@ export namespace RestLink {
     /**
      * Structure to allow you to specify the __typename when you have nested objects in your REST response!
      * 
+     * If you want to force Required Properties, you can throw an error in your patcher,
+     *  or `delete` a field from the data response provided to your typePatcher function!
+     * 
      * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
      *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
      *           And consider submitting alternate solutions to the problem!
