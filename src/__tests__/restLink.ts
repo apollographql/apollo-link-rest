@@ -2,7 +2,10 @@ import { execute, makePromise, ApolloLink } from 'apollo-link';
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import { onError } from 'apollo-link-error';
-import gql from 'graphql-tag';
+
+import gql, { disableFragmentWarnings } from 'graphql-tag';
+disableFragmentWarnings();
+
 import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
@@ -302,7 +305,7 @@ describe('Configuration', async () => {
       );
       expect(response.data.post).toEqual(expect.objectContaining(resultPost));
     });
-    it('fieldNameNormalizer Too Late - Workaround 2', async () => {
+    it.skip('fieldNameNormalizer Too Late - Workaround 2', async () => {
       expect.assertions(1);
 
       const link = new RestLink({
@@ -1767,7 +1770,7 @@ describe('Mutation', () => {
       const resultPost = { __typename: 'Post', ...post };
 
       const createPostMutation = gql`
-        fragment Item on PublishablePostInput {
+        fragment Item on any {
           name: String
         }
 
@@ -2075,6 +2078,49 @@ describe('Apollo client integration', () => {
     });
 
     expect(data.post).toBeDefined();
+  });
+
+  it('treats absent response fields as optional', async () => {
+    // Discovered in: https://github.com/apollographql/apollo-link-rest/issues/74
+    expect.assertions(2);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = {
+      id: '1',
+      title: 'Love apollo',
+      content: 'Best graphql client ever.',
+    };
+    fetchMock.get('/api/post/1', post);
+
+    const postTitleQuery = gql`
+      query postTitle {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+          unfairCriticism
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postWithContent',
+        query: postTitleQuery,
+      }),
+    );
+
+    expect(data.post.unfairCriticism).toBeNull();
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link,
+    });
+
+    const { data: data2 }: { data: any } = await client.query({
+      query: postTitleQuery,
+    });
+    expect(data2.post.unfairCriticism).toBeNull();
   });
 
   it('can catch HTTP Status errors', async done => {
