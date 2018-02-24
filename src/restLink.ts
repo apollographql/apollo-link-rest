@@ -1,4 +1,12 @@
-import { OperationTypeNode } from 'graphql';
+import {
+  OperationTypeNode,
+  OperationDefinitionNode,
+  FragmentDefinitionNode,
+  // Query Nodes
+  DirectiveNode,
+  FieldNode,
+  SelectionSetNode,
+} from 'graphql';
 import {
   ApolloLink,
   Observable,
@@ -9,7 +17,13 @@ import {
 import {
   hasDirectives,
   getMainDefinition,
+  getFragmentDefinitions,
+  createFragmentMap,
   addTypenameToDocument,
+  FragmentMap,
+  isField,
+  isInlineFragment,
+  resultKeyNameFromField,
 } from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
@@ -90,6 +104,9 @@ export namespace RestLink {
 
     /**
      * Structure to allow you to specify the __typename when you have nested objects in your REST response!
+     * 
+     * If you want to force Required Properties, you can throw an error in your patcher,
+     *  or `delete` a field from the data response provided to your typePatcher function!
      * 
      * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
      *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
@@ -187,6 +204,158 @@ const addTypeNameToResult = (
   return typePatcher(result, __typename, typePatcher);
 };
 
+const quickFindRestDirective = (field: FieldNode): DirectiveNode | null => {
+  if (field.directives && field.directives.length) {
+    return field.directives.find(directive => 'rest' === directive.name.value);
+  }
+  return null;
+};
+/**
+ * The way graphql works today, it doesn't hand us the AST tree for our query, it hands us the ROOT
+ * This method searches for REST-directive-attached nodes that are named to match this query.
+ * 
+ * A little bit of wasted compute, but alternative would be a patch in graphql-anywhere.
+ * 
+ * @param resultKey SearchKey for REST directive-attached item matching this sub-query
+ * @param current current node in the REST-JSON-response
+ * @param mainDefinition Parsed Query Definition
+ * @param fragmentMap Map of Named Fragments
+ * @param currentSelectionSet Current selection set we're filtering by
+ */
+function findRestDirectivesThenInsertNullsForOmittedFields(
+  resultKey: string,
+  current: any[] | object, // currentSelectionSet starts at root, so wait until we're inside a Field tagged with an @rest directive to activate!
+  mainDefinition: OperationDefinitionNode | FragmentDefinitionNode,
+  fragmentMap: FragmentMap,
+  currentSelectionSet: SelectionSetNode,
+): any[] | object {
+  if (current == null || currentSelectionSet == null) {
+    return current;
+  }
+  currentSelectionSet.selections.forEach(node => {
+    if (isInlineFragment(node)) {
+      findRestDirectivesThenInsertNullsForOmittedFields(
+        resultKey,
+        current,
+        mainDefinition,
+        fragmentMap,
+        node.selectionSet,
+      );
+    } else if (node.kind === 'FragmentSpread') {
+      const fragment = fragmentMap[node.name.value];
+      findRestDirectivesThenInsertNullsForOmittedFields(
+        resultKey,
+        current,
+        mainDefinition,
+        fragmentMap,
+        fragment.selectionSet,
+      );
+    } else if (isField(node)) {
+      const name = resultKeyNameFromField(node);
+      if (name === resultKey && quickFindRestDirective(node) != null) {
+        // Jackpot! We found our selectionSet!
+        insertNullsForAnyOmittedFields(
+          current,
+          mainDefinition,
+          fragmentMap,
+          node.selectionSet,
+        );
+      } else {
+        findRestDirectivesThenInsertNullsForOmittedFields(
+          resultKey,
+          current,
+          mainDefinition,
+          fragmentMap,
+          node.selectionSet,
+        );
+      }
+    } else {
+      // This will give a TypeScript build-time error if you did something wrong or the AST changes!
+      return ((node: never): never => {
+        throw new Error('Unhandled Node Type in SelectionSetNode.selections');
+      })(node);
+    }
+  });
+  // Return current to have our result pass to next link in async promise chain!
+  return current;
+}
+/**
+ * Recursively walks a handed object in parallel with the Query SelectionSet,
+ *  and inserts `null` for any field that is missing from the response.
+ * 
+ * This is needed because ApolloClient will throw an error automatically if it's 
+ *  missing -- effectively making all of rest-link's selections implicitly non-optional.
+ * 
+ * If you want to implement required fields, you need to use typePatcher to *delete*
+ *  fields when they're null and you want the query to fail instead.
+ * 
+ * @param current Current object we're patching
+ * @param mainDefinition Parsed Query Definition
+ * @param fragmentMap Map of Named Fragments
+ * @param currentSelectionSet Current selection set we're filtering by
+ */
+function insertNullsForAnyOmittedFields(
+  current: any[] | object, // currentSelectionSet starts at root, so wait until we're inside a Field tagged with an @rest directive to activate!
+  mainDefinition: OperationDefinitionNode | FragmentDefinitionNode,
+  fragmentMap: FragmentMap,
+  currentSelectionSet: SelectionSetNode,
+): void {
+  if (current == null || currentSelectionSet == null) {
+    return;
+  }
+  currentSelectionSet.selections.forEach(node => {
+    if (isInlineFragment(node)) {
+      insertNullsForAnyOmittedFields(
+        current,
+        mainDefinition,
+        fragmentMap,
+        node.selectionSet,
+      );
+    } else if (node.kind === 'FragmentSpread') {
+      const fragment = fragmentMap[node.name.value];
+      insertNullsForAnyOmittedFields(
+        current,
+        mainDefinition,
+        fragmentMap,
+        fragment.selectionSet,
+      );
+    } else if (isField(node)) {
+      const value = current[node.name.value];
+      if (typeof value === 'undefined' && node.name.value !== '__typename') {
+        // Patch in a null where the field would have been marked as missing
+        current[node.name.value] = null;
+      } else if (Array.isArray(value)) {
+        value.forEach(entry => {
+          insertNullsForAnyOmittedFields(
+            entry,
+            mainDefinition,
+            fragmentMap,
+            node.selectionSet,
+          );
+        });
+      } else if (
+        value != null &&
+        typeof value === 'object' &&
+        node.selectionSet != null
+      ) {
+        insertNullsForAnyOmittedFields(
+          value,
+          mainDefinition,
+          fragmentMap,
+          node.selectionSet,
+        );
+      } else {
+        // Other types (string, number) do not need recursive patching!
+      }
+    } else {
+      // This will give a TypeScript build-time error if you did something wrong or the AST changes!
+      return ((node: never): never => {
+        throw new Error('Unhandled Node Type in SelectionSetNode.selections');
+      })(node);
+    }
+  });
+}
+
 const getURIFromEndpoints = (
   endpoints: RestLink.Endpoints,
   endpoint: RestLink.Endpoint,
@@ -244,7 +413,7 @@ const convertObjectKeys = (
     const nestedKeyPath = keypath.concat([key]);
     if (Array.isArray(value)) {
       value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
-    } else if (typeof value === 'object') {
+    } else if (value != null && typeof value === 'object') {
       value = convertObjectKeys(value, converter, nestedKeyPath);
     }
     acc[convert(key, nestedKeyPath)] = value;
@@ -398,6 +567,8 @@ interface RequestContext {
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  mainDefinition: OperationDefinitionNode | FragmentDefinitionNode;
+  fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
 }
 
@@ -428,8 +599,13 @@ const resolver: Resolver = async (
     customFetch,
     operationType,
     typePatcher,
+    mainDefinition,
+    fragmentDefinitions,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
+
+  const fragmentMap = createFragmentMap(fragmentDefinitions);
+
   let {
     path,
     endpoint,
@@ -527,6 +703,15 @@ const resolver: Resolver = async (
         return res;
       })
       .then(res => res.json())
+      .then(result =>
+        findRestDirectivesThenInsertNullsForOmittedFields(
+          resultKey,
+          result,
+          mainDefinition,
+          fragmentMap,
+          mainDefinition.selectionSet,
+        ),
+      )
       .then(result => addTypeNameToResult(result, type, typePatcher));
   } catch (error) {
     throw error;
@@ -663,8 +848,11 @@ export class RestLink extends ApolloLink {
 
     const queryWithTypename = addTypenameToDocument(query);
 
+    const mainDefinition = getMainDefinition(query);
+    const fragmentDefinitions = getFragmentDefinitions(query);
+
     const operationType: OperationTypeNode =
-      (getMainDefinition(query) || ({} as any)).operation || 'query';
+      (mainDefinition || ({} as any)).operation || 'query';
 
     let resolverOptions: {
       resultMapper?: (fields: any) => any;
@@ -688,6 +876,8 @@ export class RestLink extends ApolloLink {
           customFetch: this.customFetch,
           operationType,
           fieldNameDenormalizer: this.fieldNameDenormalizer,
+          mainDefinition,
+          fragmentDefinitions,
           typePatcher: this.typePatcher,
         },
         variables,
