@@ -4,9 +4,11 @@
 
 ### v0.next
 
-- Fix: Sourcemaps should now be TypeScript aware (via rollup changes) -- this means accurate code-coverage!
+### v0.2.0
+
 - Feature: Support Handling Non-success HTTP Status Codes
 - Feature: Dynamic Paths & Query building using `pathBuilder`
+- Improvement: Sourcemaps should now be more TypeScript aware (via rollup changes) see [#76](https://github.com/apollographql/apollo-link-rest/issues/76) for more up-to-date info.
 
 ### v0.1.0
 
