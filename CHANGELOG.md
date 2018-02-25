@@ -4,6 +4,7 @@
 
 ### v0.next
 
+- Fix: Sourcemaps should now be TypeScript aware (via rollup changes) -- this means accurate code-coverage!
 - Feature: Support Handling Non-success HTTP Status Codes
 - Feature: Dynamic Paths & Query building using `pathBuilder`
 
