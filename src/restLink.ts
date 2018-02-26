@@ -538,8 +538,6 @@ const rethrowServerSideError = (
   throw error;
 };
 
-let exportVariables = {};
-
 /** Apollo-Link getContext, provided from the user & mutated by upstream links */
 interface LinkChainContext {
   /** Credentials Policy for Fetch */
@@ -563,6 +561,9 @@ interface RequestContext {
   /** Credentials Policy for Fetch */
   credentials?: RequestCredentials | null;
 
+  /** Exported variables fulfilled in this request, using @export(as:) */
+  exportVariables: { [key: string]: any };
+
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
@@ -580,9 +581,7 @@ const resolver: Resolver = async (
   info: ExecInfo,
 ) => {
   const { directives, isLeaf, resultKey } = info;
-  if (root === null) {
-    exportVariables = {};
-  }
+  const { exportVariables } = context;
 
   const currentNode = (root || {})[resultKey];
   if (root && directives && directives.export) {
@@ -863,23 +862,27 @@ export class RestLink extends ApolloLink {
       };
     }
 
+    const requestContext: RequestContext = {
+      headers,
+      endpoints: this.endpoints,
+      // Provide an empty hash for this request's exports to be stuffed into
+      exportVariables: {},
+      credentials,
+      customFetch: this.customFetch,
+      operationType,
+      fieldNameNormalizer: this.fieldNameNormalizer,
+      fieldNameDenormalizer: this.fieldNameDenormalizer,
+      mainDefinition,
+      fragmentDefinitions,
+      typePatcher: this.typePatcher,
+    };
+    const resolverOptions = {};
     return new Observable(observer => {
       graphql(
         resolver,
         queryWithTypename,
         null,
-        {
-          headers,
-          endpoints: this.endpoints,
-          export: exportVariables,
-          credentials,
-          customFetch: this.customFetch,
-          operationType,
-          fieldNameDenormalizer: this.fieldNameDenormalizer,
-          mainDefinition,
-          fragmentDefinitions,
-          typePatcher: this.typePatcher,
-        },
+        requestContext,
         variables,
         resolverOptions,
       )
