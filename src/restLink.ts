@@ -107,7 +107,7 @@ export namespace RestLink {
 
     /**
      * Structure to allow you to specify the __typename when you have nested objects in your REST response!
-     * 
+     *
      * If you want to force Required Properties, you can throw an error in your patcher,
      *  or `delete` a field from the data response provided to your typePatcher function!
      *
@@ -152,8 +152,8 @@ export namespace RestLink {
     endpoint?: string;
     /**
      * Function that constructs a request path out of the Environmental
-     *  state when processing this @rest(...) call. 
-     * 
+     *  state when processing this @rest(...) call.
+     *
      * - @optional if you provide: @see DirectiveOptions.path
      * - **note**: this does not do any URI encoding on the result, so be aware if you're
      *  making a query-string!
@@ -161,7 +161,7 @@ export namespace RestLink {
     pathBuilder?: (args: object) => string;
     /**
      * Optional method that constructs a RequestBody out of the Environmental state
-     * when processing this @rest(...) call. 
+     * when processing this @rest(...) call.
      * @default function that extracts the bodyKey from the args.
      */
     bodyBuilder?: (args: object) => object;
@@ -219,9 +219,9 @@ const quickFindRestDirective = (field: FieldNode): DirectiveNode | null => {
 /**
  * The way graphql works today, it doesn't hand us the AST tree for our query, it hands us the ROOT
  * This method searches for REST-directive-attached nodes that are named to match this query.
- * 
+ *
  * A little bit of wasted compute, but alternative would be a patch in graphql-anywhere.
- * 
+ *
  * @param resultKey SearchKey for REST directive-attached item matching this sub-query
  * @param current current node in the REST-JSON-response
  * @param mainDefinition Parsed Query Definition
@@ -288,13 +288,13 @@ function findRestDirectivesThenInsertNullsForOmittedFields(
 /**
  * Recursively walks a handed object in parallel with the Query SelectionSet,
  *  and inserts `null` for any field that is missing from the response.
- * 
- * This is needed because ApolloClient will throw an error automatically if it's 
+ *
+ * This is needed because ApolloClient will throw an error automatically if it's
  *  missing -- effectively making all of rest-link's selections implicitly non-optional.
- * 
+ *
  * If you want to implement required fields, you need to use typePatcher to *delete*
  *  fields when they're null and you want the query to fail instead.
- * 
+ *
  * @param current Current object we're patching
  * @param mainDefinition Parsed Query Definition
  * @param fragmentMap Map of Named Fragments
