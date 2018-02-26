@@ -4,6 +4,8 @@
 
 ### v0.next
 
+- Improvement: Jest should now report code-coverage correctly for Unit Tests on PRs!
+
 ### v0.2.0
 
 - Feature: Support Handling Non-success HTTP Status Codes
