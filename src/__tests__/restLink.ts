@@ -172,24 +172,30 @@ describe('Configuration', async () => {
       fetchMock.restore();
     });
     it('should apply fieldNameNormalizer if specified', async () => {
-      expect.assertions(2);
+      expect.assertions(3);
       const link = new RestLink({
         uri: '/api',
         fieldNameNormalizer: camelCase,
       });
+      // "Server" returns TitleCased and snake_cased fields
+      // fieldNameNormalizer changes them to camelCase
       const post = { id: '1', Title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      const tags = [{ Name: 'apollo' }, { Name: 'graphql' }];
+      const tags = [
+        { Name: 'apollo', tag_description: 'once' },
+        { Name: 'graphql', tag_description: 'twice' },
+      ];
       fetchMock.get('/api/tags', tags);
 
       const postAndTags = gql`
         query postAndTags {
           post @rest(type: "Post", path: "/post/1") {
             id
-            Title
-            Tags @rest(type: "[Tag]", path: "/tags") {
-              Name
+            title
+            tags @rest(type: "[Tag]", path: "/tags") {
+              name
+              tagDescription
             }
           }
         }
@@ -204,6 +210,7 @@ describe('Configuration', async () => {
 
       expect(data.post.title).toBeDefined();
       expect(data.post.tags[0].name).toBeDefined();
+      expect(data.post.tags[0].tagDescription).toEqual('once');
     });
     it('should preserve __typename when using fieldNameNormalizer', async () => {
       expect.assertions(2);
@@ -222,9 +229,9 @@ describe('Configuration', async () => {
           post @rest(type: "Post", path: "/post/1") {
             __typename
             id
-            Title
-            Tags @rest(type: "[Tag]", path: "/tags") {
-              Name
+            title
+            tags @rest(type: "[Tag]", path: "/tags") {
+              name
             }
           }
         }
@@ -239,105 +246,6 @@ describe('Configuration', async () => {
 
       expect(data.post.__typename).toBeDefined();
       expect(data.post.__typename).toEqual('Post');
-    });
-    it.skip('fieldNameNormalizer Too Late graphql-anywhere issues/2744', async () => {
-      // https://github.com/apollographql/apollo-client/issues/2744
-      expect.assertions(1);
-
-      const link = new RestLink({
-        uri: '/api',
-        fieldNameNormalizer: camelCase,
-      });
-
-      // the id in this hash simulates the server *assigning* an id for the new post
-      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-      fetchMock.get('/api/posts/1', snakePost);
-      const resultPost = camelPost;
-
-      const getPostQuery = gql`
-        query lookupPost($id: String!) {
-          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-            id
-            titleString
-            categoryId
-          }
-        }
-      `;
-      const response = await makePromise<Result>(
-        execute(link, {
-          operationName: 'lookupPost',
-          query: getPostQuery,
-          variables: { id: camelPost.id },
-        }),
-      );
-      expect(response.data.post).toEqual(resultPost);
-    });
-    it('fieldNameNormalizer Too Late - Workaround 1', async () => {
-      expect.assertions(1);
-
-      const link = new RestLink({
-        uri: '/api',
-        fieldNameNormalizer: camelCase,
-      });
-
-      // the id in this hash simulates the server *assigning* an id for the new post
-      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-      fetchMock.get('/api/posts/1', snakePost);
-      const resultPost = camelPost;
-
-      const getPostQuery = gql`
-        query lookupPost($id: String!) {
-          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-            id
-            title_string
-            category_id
-          }
-        }
-      `;
-      const response = await makePromise<Result>(
-        execute(link, {
-          operationName: 'lookupPost',
-          query: getPostQuery,
-          variables: { id: camelPost.id },
-        }),
-      );
-      expect(response.data.post).toEqual(expect.objectContaining(resultPost));
-    });
-    it.skip('fieldNameNormalizer Too Late - Workaround 2', async () => {
-      expect.assertions(1);
-
-      const link = new RestLink({
-        uri: '/api',
-        fieldNameNormalizer: camelCase,
-      });
-
-      // the id in this hash simulates the server *assigning* an id for the new post
-      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-      fetchMock.get('/api/posts/1', snakePost);
-      const resultPost = camelPost;
-
-      const getPostQuery = gql`
-        query lookupPost($id: String!) {
-          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-            id
-            title_string
-            titleString
-            category_id
-            categoryId
-          }
-        }
-      `;
-      const response = await makePromise<Result>(
-        execute(link, {
-          operationName: 'lookupPost',
-          query: getPostQuery,
-          variables: { id: camelPost.id },
-        }),
-      );
-      expect(response.data.post).toEqual(expect.objectContaining(resultPost));
     });
   });
 
@@ -1637,8 +1545,8 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
-    it('corrects names to snake-case for link-level denormalizer', async () => {
-      expect.assertions(2);
+    it('corrects names to snake_case for link-level denormalizer', async () => {
+      expect.assertions(3);
 
       const link = new RestLink({
         uri: '/api',
@@ -1665,9 +1573,6 @@ describe('Mutation', () => {
             id
             titleString
             categoryId
-            # Add Workaround Fields
-            title_string
-            category_id
           }
         }
       `;
@@ -1678,20 +1583,22 @@ describe('Mutation', () => {
           variables: { input: camelPost },
         }),
       );
-      expect(response.data.publishedPost).toEqual(
-        expect.objectContaining(resultPost),
-      );
-
+      
       const requestCall = fetchMock.calls('/api/posts/new')[0];
+      
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(intermediatePost),
         }),
       );
+      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
+      );
     });
-    it('corrects names to snake-case for request-level denormalizer', async () => {
-      expect.assertions(2);
+    it('corrects names to snake_case for request-level denormalizer', async () => {
+      expect.assertions(3);
 
       const link = new RestLink({
         uri: '/api',
@@ -1708,7 +1615,7 @@ describe('Mutation', () => {
       const createPostMutation = gql`
         fragment PublishablePostInput on REST {
           titleString: String
-          categoryId: Number
+          categoryId: Int
         }
 
         mutation publishPost($input: PublishablePostInput!) {
@@ -1722,9 +1629,6 @@ describe('Mutation', () => {
             id
             titleString
             categoryId
-            # Add Workaround Fields
-            title_string
-            category_id
           }
         }
       `;
@@ -1735,16 +1639,18 @@ describe('Mutation', () => {
           variables: { input: camelPost, requestLevelDenormalizer: snake_case },
         }),
       );
-      expect(response.data.publishedPost).toEqual(
-        expect.objectContaining(resultPost),
-      );
 
       const requestCall = fetchMock.calls('/api/posts/new')[0];
+      
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(intermediatePost),
         }),
+      );
+      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
       );
     });
   });

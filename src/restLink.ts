@@ -93,6 +93,9 @@ export namespace RestLink {
 
     /**
      * A function that takes the response field name and converts it into a GraphQL compliant name
+     * 
+     * @note This is called *before* @see typePatcher so that it happens after
+     *       optional-field-null-insertion.
      */
     fieldNameNormalizer?: FieldNameNormalizer;
 
@@ -107,6 +110,9 @@ export namespace RestLink {
      * 
      * If you want to force Required Properties, you can throw an error in your patcher,
      *  or `delete` a field from the data response provided to your typePatcher function!
+     *
+     * @note: This is called *after* @see fieldNameNormalizer because that happens
+     *        after optional-nulls insertion, and those would clobber normalized names.
      * 
      * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
      *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
@@ -385,21 +391,27 @@ const noMangleKeys = ['__typename'];
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
-  converter: RestLink.FieldNameNormalizer,
+  __converter: RestLink.FieldNameNormalizer,
   keypath: string[] = [],
 ): object => {
-  let convert: RestLink.FieldNameNormalizer = null;
-  if (converter.prototype.arity != 2) {
-    convert = (name, keypath) => {
-      return converter(name);
+  let converter: RestLink.FieldNameNormalizer = null;
+  if (__converter.prototype.arity != 2) {
+    converter = (name, keypath) => {
+      return __converter(name);
     };
   } else {
-    convert = converter;
+    converter = __converter;
   }
 
-  if (['string', 'number'].indexOf(typeof object) != -1) {
+  if (object == null || ['string', 'number'].indexOf(typeof object) != -1) {
     // Object is a scalar, no keys to convert!
     return object;
+  }
+
+  if (Array.isArray(object)) {
+    return object.map((o, index) =>
+      convertObjectKeys(o, converter, [...keypath, String(index)]),
+    );
   }
 
   return Object.keys(object).reduce((acc: any, key: string) => {
@@ -410,13 +422,12 @@ const convertObjectKeys = (
       return acc;
     }
 
-    const nestedKeyPath = keypath.concat([key]);
-    if (Array.isArray(value)) {
-      value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
-    } else if (value != null && typeof value === 'object') {
-      value = convertObjectKeys(value, converter, nestedKeyPath);
-    }
-    acc[convert(key, nestedKeyPath)] = value;
+    const nestedKeyPath = [...keypath, key];
+    acc[converter(key, nestedKeyPath)] = convertObjectKeys(
+      value,
+      converter,
+      nestedKeyPath,
+    );
     return acc;
   }, {});
 };
@@ -567,6 +578,7 @@ interface RequestContext {
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
+  fieldNameNormalizer: RestLink.FieldNameNormalizer;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
   mainDefinition: OperationDefinitionNode | FragmentDefinitionNode;
   fragmentDefinitions: FragmentDefinitionNode[];
@@ -600,6 +612,7 @@ const resolver: Resolver = async (
     typePatcher,
     mainDefinition,
     fragmentDefinitions,
+    fieldNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
 
@@ -702,6 +715,12 @@ const resolver: Resolver = async (
         return res;
       })
       .then(res => res.json())
+      .then(
+        result =>
+          fieldNameNormalizer == null
+            ? result
+            : convertObjectKeys(result, fieldNameNormalizer),
+      )
       .then(result =>
         findRestDirectivesThenInsertNullsForOmittedFields(
           resultKey,
@@ -852,15 +871,6 @@ export class RestLink extends ApolloLink {
 
     const operationType: OperationTypeNode =
       (mainDefinition || ({} as any)).operation || 'query';
-
-    let resolverOptions: {
-      resultMapper?: (fields: any) => any;
-    } = {};
-    if (this.fieldNameNormalizer) {
-      resolverOptions.resultMapper = resultFields => {
-        return convertObjectKeys(resultFields, this.fieldNameNormalizer);
-      };
-    }
 
     const requestContext: RequestContext = {
       headers,
