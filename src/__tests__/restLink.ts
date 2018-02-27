@@ -736,7 +736,7 @@ describe('Query single call', () => {
 
     const postTitleQuery = gql`
       query postTitle {
-        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+        post(id: $id) @rest(type: "Post", path: "/post/:id") {
           id
           title
         }
@@ -752,6 +752,92 @@ describe('Query single call', () => {
     );
 
     expect(data.post.title).toBe(post.title);
+  });
+
+  it('can pass param with `0` value to a query with a variable', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/feed?offset=0', post);
+
+    const feedQuery = gql`
+      query feed {
+        post(offset: $offset)
+          @rest(type: "Post", path: "/feed?offset=:offset") {
+          id
+          title
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'feed',
+        query: feedQuery,
+        variables: { offset: 0 },
+      }),
+    );
+
+    expect(data.post.title).toBe(post.title);
+  });
+
+  it('can pass param with `false` value to a query with a variable', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/feed?published=false', post);
+
+    const feedQuery = gql`
+      query feed {
+        post(published: $published)
+          @rest(type: "Post", path: "/feed?published=:published") {
+          id
+          title
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'feed',
+        query: feedQuery,
+        variables: { published: false },
+      }),
+    );
+
+    expect(data.post.title).toBe(post.title);
+  });
+
+  it('can pass param with `null` value to a query with a variable', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const person = { name: 'John' };
+    fetchMock.get('/api/people?address=null', person);
+
+    const peopleWithoutAddressQuery = gql`
+      query feed {
+        people(address: $address)
+          @rest(type: "Person", path: "/people?address=:address") {
+          name
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'feed',
+        query: peopleWithoutAddressQuery,
+        variables: { address: null },
+      }),
+    );
+
+    expect(data.people.name).toBe(person.name);
   });
 
   it('can hit two endpoints!', async () => {

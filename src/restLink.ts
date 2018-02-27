@@ -371,7 +371,7 @@ const replaceParam = (
   name: string,
   value: string,
 ): string => {
-  if (!value || !name) {
+  if (value === undefined || name === undefined) {
     return endpoint;
   }
   return endpoint.replace(`:${name}`, value);
