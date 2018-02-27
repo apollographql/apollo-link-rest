@@ -4,6 +4,9 @@
 
 ### v0.next
 
+### v0.2.1
+
+- Fix: Query throws an error when path-parameter is falsy [#82](https://github.com/apollographql/apollo-link-rest/issues/82)
 - Fix: Concurrency bug when multiple requests are in flight and both use `@export(as:)` [#81](https://github.com/apollographql/apollo-link-rest/issues/81)
 - Fix: fieldNameNormalizer/fieldNameDenormalizer should now be working! [#80](https://github.com/apollographql/apollo-link-rest/issues/80)
 - Improvement: Jest should now report code-coverage correctly for Unit Tests on PRs!
