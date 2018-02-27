@@ -309,6 +309,18 @@ function insertNullsForAnyOmittedFields(
   if (current == null || currentSelectionSet == null) {
     return;
   }
+  if (Array.isArray(current)) {
+    // If our current value is an array, process our selection set for each entry.
+    current.forEach(c =>
+      insertNullsForAnyOmittedFields(
+        c,
+        mainDefinition,
+        fragmentMap,
+        currentSelectionSet,
+      ),
+    );
+    return;
+  }
   currentSelectionSet.selections.forEach(node => {
     if (isInlineFragment(node)) {
       insertNullsForAnyOmittedFields(
@@ -327,18 +339,11 @@ function insertNullsForAnyOmittedFields(
       );
     } else if (isField(node)) {
       const value = current[node.name.value];
-      if (typeof value === 'undefined' && node.name.value !== '__typename') {
+      if (node.name.value === '__typename') {
+        // Don't mess with special fields like __typename
+      } else if (typeof value === 'undefined') {
         // Patch in a null where the field would have been marked as missing
         current[node.name.value] = null;
-      } else if (Array.isArray(value)) {
-        value.forEach(entry => {
-          insertNullsForAnyOmittedFields(
-            entry,
-            mainDefinition,
-            fragmentMap,
-            node.selectionSet,
-          );
-        });
       } else if (
         value != null &&
         typeof value === 'object' &&
