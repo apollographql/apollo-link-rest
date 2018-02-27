@@ -1669,9 +1669,9 @@ describe('Mutation', () => {
           variables: { input: camelPost },
         }),
       );
-      
+
       const requestCall = fetchMock.calls('/api/posts/new')[0];
-      
+
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
@@ -1727,7 +1727,7 @@ describe('Mutation', () => {
       );
 
       const requestCall = fetchMock.calls('/api/posts/new')[0];
-      
+
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
@@ -2082,7 +2082,9 @@ describe('Apollo client integration', () => {
       title: 'Love apollo',
       content: 'Best graphql client ever.',
     };
+    const comments = [{ id: 'c.12345', text: 'This is great.' }];
     fetchMock.get('/api/post/1', post);
+    fetchMock.get('/api/post/1/comments', comments);
 
     const postTitleQuery = gql`
       query postTitle {
@@ -2090,6 +2092,11 @@ describe('Apollo client integration', () => {
           id
           title
           unfairCriticism
+          comments @rest(type: "Comment", path: "/post/1/comments") {
+            id
+            text
+            spammyContent
+          }
         }
       }
     `;
