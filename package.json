@@ -1,6 +1,6 @@
 {
   "name": "apollo-link-rest",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Query existing REST services with GraphQL",
   "license": "MIT",
   "main": "./lib/bundle.umd.js",
