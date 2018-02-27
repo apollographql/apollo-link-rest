@@ -4,6 +4,8 @@
 
 ### v0.next
 
+- Fix: Concurrency bug when multiple requests are in flight and both use `@export(as:)` [#81](https://github.com/apollographql/apollo-link-rest/issues/81)
+- Fix: fieldNameNormalizer/fieldNameDenormalizer should now be working! [#80](https://github.com/apollographql/apollo-link-rest/issues/80)
 - Improvement: Jest should now report code-coverage correctly for Unit Tests on PRs!
 
 ### v0.2.0
