@@ -4,6 +4,10 @@
 
 ### v0.next
 
+### v0.2.3
+
+- Fix: react-native: Android boolean responses being iterated by fieldNameNormalizer throws an error [#89](https://github.com/apollographql/apollo-link-rest/issues/89)
+
 ### v0.2.2
 
 - Fix: Queries with Arrays & omitted fields would treat those fields as required (and fail) [#85](https://github.com/apollographql/apollo-link-rest/issues/85)

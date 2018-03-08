@@ -408,8 +408,8 @@ const convertObjectKeys = (
     converter = __converter;
   }
 
-  if (object == null || ['string', 'number'].indexOf(typeof object) != -1) {
-    // Object is a scalar, no keys to convert!
+  if (object == null || typeof object !== 'object') {
+    // Object is a scalar or null / undefined => no keys to convert!
     return object;
   }
 
