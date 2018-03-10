@@ -283,6 +283,41 @@ describe('Configuration', async () => {
       expect(data.post.title).toBe('custom');
     });
   });
+
+  describe('Default endpoint', () => {
+    it('should produce a warning if not specified', async () => {
+      let warning = '';
+      const warn = message => (warning = message);
+
+      console['warn'] = jest.fn(warn);
+
+      const link = new RestLink({
+        endpoints: {
+          endpointUri: '/api',
+        },
+      });
+
+      expect(warning).toBe(
+        'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
+      );
+    });
+
+    it('should not produce a warning when specified', async () => {
+      let warning = '';
+      const warn = message => (warning = message);
+
+      console['warn'] = jest.fn(warn);
+
+      const link = new RestLink({
+        uri: '/api/v1',
+        endpoints: {
+          endpointUri: '/api/v2',
+        },
+      });
+
+      expect(warning).toBe('');
+    });
+  });
 });
 describe('Complex responses need nested __typename insertions', () => {
   it('can configure typename by providing a custom type-patcher table', async () => {
