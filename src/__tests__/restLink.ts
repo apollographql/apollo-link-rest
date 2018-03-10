@@ -291,7 +291,7 @@ describe('Configuration', async () => {
 
       console['warn'] = jest.fn(warn);
 
-      const link = new RestLink({
+      new RestLink({
         endpoints: {
           endpointUri: '/api',
         },
@@ -308,7 +308,7 @@ describe('Configuration', async () => {
 
       console['warn'] = jest.fn(warn);
 
-      const link = new RestLink({
+      new RestLink({
         uri: '/api/v1',
         endpoints: {
           endpointUri: '/api/v2',
