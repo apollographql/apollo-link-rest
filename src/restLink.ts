@@ -785,7 +785,7 @@ export class RestLink extends ApolloLink {
           "RestLink was configured with a default uri that doesn't match what's passed in to the endpoints map.",
         );
       }
-      this.endpoints[DEFAULT_ENDPOINT_KEY] == uri;
+      this.endpoints[DEFAULT_ENDPOINT_KEY] = uri;
     }
 
     if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
