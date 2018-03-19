@@ -652,7 +652,10 @@ const resolver: Resolver = async (
         );
         if (pathWithParams.includes(':')) {
           throw new Error(
-            'Missing params to run query, specify it in the query params or use an export directive',
+            'Missing parameters to run query, specify it in the query params or use ' +
+              'an export directive. (If you need to use ":" inside a variable string' +
+              ' make sure to encode the variables properly using `encodeURIComponent' +
+              '`. Alternatively see documentation about using pathBuilder.)',
           );
         }
         return pathWithParams;
