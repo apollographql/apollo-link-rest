@@ -481,7 +481,7 @@ export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
  * This merge policy deletes any matching headers from the link's default headers.
  * - Pass headersToOverride array & a headers arg to context and this policy will automatically be selected.
  */
-export const overrideHeadersMergePolicyHelper = (
+export const overrideHeadersMergePolicy = (
   linkHeaders: Headers,
   headersToOverride: string[],
   requestHeaders: Headers | null,
@@ -495,11 +495,13 @@ export const overrideHeadersMergePolicyHelper = (
   });
   return concatHeadersMergePolicy(result, requestHeaders || new Headers());
 };
+export const overrideHeadersMergePolicyHelper = overrideHeadersMergePolicy; // Deprecated name
+
 const makeOverrideHeadersMergePolicy = (
   headersToOverride: string[],
 ): RestLink.HeadersMergePolicy => {
   return (linkHeaders, requestHeaders) => {
-    return overrideHeadersMergePolicyHelper(
+    return overrideHeadersMergePolicy(
       linkHeaders,
       headersToOverride,
       requestHeaders,
