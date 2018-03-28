@@ -6,6 +6,7 @@
 
 ### v0.2.4
 
+- Add in-repo copy of docs so PRs can make changes to docs in sync with implementation changes
 - Enable JSDoc comments for TypeScript!
 
 ### v0.2.3
