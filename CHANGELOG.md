@@ -6,8 +6,10 @@
 
 ### v0.2.4
 
-- Add in-repo copy of docs so PRs can make changes to docs in sync with implementation changes
 - Enable JSDoc comments for TypeScript!
+- Add in-repo copy of docs so PRs can make changes to docs in sync with implementation changes.
+- Fixed a bug with recursive type-patching around arrays.
+- Fixed a bug in default URI assignment! [#91](https://github.com/apollographql/apollo-link-rest/pull/91)
 
 ### v0.2.3
 
