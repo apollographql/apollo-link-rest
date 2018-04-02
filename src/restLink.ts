@@ -820,13 +820,14 @@ export class RestLink extends ApolloLink {
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
       ) => {
+        const __typename = data.__typename || outerType;
         if (Array.isArray(data)) {
-          return data.map(d => patchDeeper(d, outerType, patchDeeper));
+          return data.map(d => patchDeeper(d, __typename, patchDeeper));
         }
-        const subPatcher = table[outerType] || (result => result);
+        const subPatcher = table[__typename] || (result => result);
         return {
-          __typename: outerType || data.__typename,
-          ...subPatcher(data, outerType, patchDeeper),
+          __typename,
+          ...subPatcher(data, __typename, patchDeeper),
         };
       };
     } else {
