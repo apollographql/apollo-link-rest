@@ -147,7 +147,21 @@ query MyQuery {
 }
 ```
 
-The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. To do so, you can define a `typePatcher`:
+The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. To do so, you can use the `@type(name: ...)` directive.
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "ResultS"){
+      name
+    }
+  }
+}
+```
+
+Or you can define a `typePatcher`:
 
 ```typescript
 const restLink = new RestLink({
@@ -166,6 +180,83 @@ const restLink = new RestLink({
     /* … other nested type patchers … */
   },
 })
+```
+
+You can also use both of these approaches in tandem: 
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "Results"){
+      name
+    }
+    typePatchedResults {
+      name
+    }
+  }
+}
+```
+
+```typescript
+const restLink = new RestLink({
+  uri: '/api',
+  typePatcher: {
+    PlanetPayload: (
+      data: any,
+      outerType: string,
+      patchDeeper: RestLink.FunctionalTypePatcher,
+    ): any => {
+      if (data.typePatchedResults != null) {
+        data.typePatchedResults = data.typePatchedResults.map( planet => { __typename: "Planet", ...planet });
+      }
+      return data;
+    },
+    /* … other nested type patchers … */
+  },
+})
+```
+
+However, you should know that at the moment the `typepatcher` is not able to act on nested objectes within annotated `@type` objects. For instance, `failingResults` will not be patched if you define it on the `typepatcher`.
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "ResultS"){
+      name
+      failingResults {
+        name
+      }
+    }
+    typePatchedResults {
+      name
+    }
+  }
+}
+```
+
+To make this work you should keep using the `@type` directive.
+
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "Results") {
+      name
+      nowWorkingResults @type(name: "NowWorkingResults") {
+        name
+      }
+    }
+    typePatchedResults {
+      name
+    }
+  }
+}
 ```
 
 <h3 id=options.example>Complete options</h3>
