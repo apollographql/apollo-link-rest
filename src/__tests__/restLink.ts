@@ -1,7 +1,11 @@
 import { execute, makePromise, ApolloLink } from 'apollo-link';
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
-import gql from 'graphql-tag';
+import { onError } from 'apollo-link-error';
+
+import gql, { disableFragmentWarnings } from 'graphql-tag';
+disableFragmentWarnings();
+
 import * as camelCase from 'camelcase';
 const snake_case = require('snake-case');
 import * as fetchMock from 'fetch-mock';
@@ -22,8 +26,12 @@ const sampleQuery = gql`
 
 type Result = { [index: string]: any };
 
-describe('Configuration', () => {
-  describe('Errors', () => {
+describe('Configuration', async () => {
+  describe('Errors', async () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+
     it('throws without any config', () => {
       expect.assertions(3);
 
@@ -43,6 +51,71 @@ describe('Configuration', () => {
       expect(() => {
         new RestLink({ uri: '/correct', endpoints: { '': '/mismatched' } });
       }).toThrow();
+    });
+
+    it('throws if missing both path and pathBuilder', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post @rest(type: "Post") {
+            id
+            title
+          }
+        }
+      `;
+
+      try {
+        await makePromise<Result>(
+          execute(link, {
+            operationName: 'postTitle',
+            query: postTitleQuery,
+          }),
+        );
+      } catch (error) {
+        expect(error.message).toBe(
+          `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
+            `This request had neither, please add one!`,
+        );
+      }
+    });
+
+    it('throws if both path and pathBuilder are simultaneously provided', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle($pathBuilder: any) {
+          post @rest(type: "Post", path: "/post/1", pathBuilder: $pathBuilder) {
+            id
+            title
+          }
+        }
+      `;
+
+      try {
+        await makePromise<Result>(
+          execute(link, {
+            operationName: 'postTitle',
+            query: postTitleQuery,
+            variables: {
+              pathBuilder: (args: any) => '/whatever',
+            },
+          }),
+        );
+      } catch (error) {
+        expect(error.message).toBe(
+          `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
+            `This request had both, please remove one!`,
+        );
+      }
     });
 
     it('throws when invalid typePatchers', async () => {
@@ -94,29 +167,35 @@ describe('Configuration', () => {
     });
   });
 
-  describe('Field name normalizer', () => {
+  describe('Field name normalizer', async () => {
     afterEach(() => {
       fetchMock.restore();
     });
     it('should apply fieldNameNormalizer if specified', async () => {
-      expect.assertions(2);
+      expect.assertions(3);
       const link = new RestLink({
         uri: '/api',
         fieldNameNormalizer: camelCase,
       });
+      // "Server" returns TitleCased and snake_cased fields
+      // fieldNameNormalizer changes them to camelCase
       const post = { id: '1', Title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      const tags = [{ Name: 'apollo' }, { Name: 'graphql' }];
+      const tags = [
+        { Name: 'apollo', tag_description: 'once' },
+        { Name: 'graphql', tag_description: 'twice' },
+      ];
       fetchMock.get('/api/tags', tags);
 
       const postAndTags = gql`
         query postAndTags {
           post @rest(type: "Post", path: "/post/1") {
             id
-            Title
-            Tags @rest(type: "[Tag]", path: "/tags") {
-              Name
+            title
+            tags @rest(type: "[Tag]", path: "/tags") {
+              name
+              tagDescription
             }
           }
         }
@@ -131,6 +210,7 @@ describe('Configuration', () => {
 
       expect(data.post.title).toBeDefined();
       expect(data.post.tags[0].name).toBeDefined();
+      expect(data.post.tags[0].tagDescription).toEqual('once');
     });
     it('should preserve __typename when using fieldNameNormalizer', async () => {
       expect.assertions(2);
@@ -149,9 +229,9 @@ describe('Configuration', () => {
           post @rest(type: "Post", path: "/post/1") {
             __typename
             id
-            Title
-            Tags @rest(type: "[Tag]", path: "/tags") {
-              Name
+            title
+            tags @rest(type: "[Tag]", path: "/tags") {
+              name
             }
           }
         }
@@ -166,105 +246,6 @@ describe('Configuration', () => {
 
       expect(data.post.__typename).toBeDefined();
       expect(data.post.__typename).toEqual('Post');
-    });
-    it.skip('fieldNameNormalizer Too Late graphql-anywhere issues/2744', async () => {
-      // https://github.com/apollographql/apollo-client/issues/2744
-      expect.assertions(1);
-
-      const link = new RestLink({
-        uri: '/api',
-        fieldNameNormalizer: camelCase,
-      });
-
-      // the id in this hash simulates the server *assigning* an id for the new post
-      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-      fetchMock.get('/api/posts/1', snakePost);
-      const resultPost = camelPost;
-
-      const getPostQuery = gql`
-        query lookupPost($id: String!) {
-          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-            id
-            titleString
-            categoryId
-          }
-        }
-      `;
-      const response = await makePromise<Result>(
-        execute(link, {
-          operationName: 'lookupPost',
-          query: getPostQuery,
-          variables: { id: camelPost.id },
-        }),
-      );
-      expect(response.data.post).toEqual(resultPost);
-    });
-    it('fieldNameNormalizer Too Late - Workaround 1', async () => {
-      expect.assertions(1);
-
-      const link = new RestLink({
-        uri: '/api',
-        fieldNameNormalizer: camelCase,
-      });
-
-      // the id in this hash simulates the server *assigning* an id for the new post
-      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-      fetchMock.get('/api/posts/1', snakePost);
-      const resultPost = camelPost;
-
-      const getPostQuery = gql`
-        query lookupPost($id: String!) {
-          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-            id
-            title_string
-            category_id
-          }
-        }
-      `;
-      const response = await makePromise<Result>(
-        execute(link, {
-          operationName: 'lookupPost',
-          query: getPostQuery,
-          variables: { id: camelPost.id },
-        }),
-      );
-      expect(response.data.post).toEqual(expect.objectContaining(resultPost));
-    });
-    it('fieldNameNormalizer Too Late - Workaround 2', async () => {
-      expect.assertions(1);
-
-      const link = new RestLink({
-        uri: '/api',
-        fieldNameNormalizer: camelCase,
-      });
-
-      // the id in this hash simulates the server *assigning* an id for the new post
-      const snakePost = { id: 1, title_string: 'Love apollo', category_id: 6 };
-      const camelPost = { id: 1, titleString: 'Love apollo', categoryId: 6 };
-      fetchMock.get('/api/posts/1', snakePost);
-      const resultPost = camelPost;
-
-      const getPostQuery = gql`
-        query lookupPost($id: String!) {
-          post(id: $id) @rest(type: "Post", path: "/posts/1", method: "GET") {
-            id
-            title_string
-            titleString
-            category_id
-            categoryId
-          }
-        }
-      `;
-      const response = await makePromise<Result>(
-        execute(link, {
-          operationName: 'lookupPost',
-          query: getPostQuery,
-          variables: { id: camelPost.id },
-        }),
-      );
-      expect(response.data.post).toEqual(expect.objectContaining(resultPost));
     });
   });
 
@@ -292,7 +273,7 @@ describe('Configuration', () => {
         }
       `;
 
-      const { data } = await makePromise(
+      const { data } = await makePromise<Result>(
         execute(link, {
           operationName: 'postTitle',
           query: postTitle,
@@ -300,6 +281,41 @@ describe('Configuration', () => {
       );
 
       expect(data.post.title).toBe('custom');
+    });
+  });
+
+  describe('Default endpoint', () => {
+    it('should produce a warning if not specified', async () => {
+      let warning = '';
+      const warn = message => (warning = message);
+
+      console['warn'] = jest.fn(warn);
+
+      new RestLink({
+        endpoints: {
+          endpointUri: '/api',
+        },
+      });
+
+      expect(warning).toBe(
+        'RestLink configured without a default URI. All @rest(…) directives must provide an endpoint key!',
+      );
+    });
+
+    it('should not produce a warning when specified', async () => {
+      let warning = '';
+      const warn = message => (warning = message);
+
+      console['warn'] = jest.fn(warn);
+
+      new RestLink({
+        uri: '/api/v1',
+        endpoints: {
+          endpointUri: '/api/v2',
+        },
+      });
+
+      expect(warning).toBe('');
     });
   });
 });
@@ -981,7 +997,7 @@ describe('Query single call', () => {
 
     const postTitleQuery = gql`
       query postTitle {
-        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+        post(id: $id) @rest(type: "Post", path: "/post/:id") {
           id
           title
         }
@@ -997,6 +1013,92 @@ describe('Query single call', () => {
     );
 
     expect(data.post.title).toBe(post.title);
+  });
+
+  it('can pass param with `0` value to a query with a variable', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/feed?offset=0', post);
+
+    const feedQuery = gql`
+      query feed {
+        post(offset: $offset)
+          @rest(type: "Post", path: "/feed?offset=:offset") {
+          id
+          title
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'feed',
+        query: feedQuery,
+        variables: { offset: 0 },
+      }),
+    );
+
+    expect(data.post.title).toBe(post.title);
+  });
+
+  it('can pass param with `false` value to a query with a variable', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/feed?published=false', post);
+
+    const feedQuery = gql`
+      query feed {
+        post(published: $published)
+          @rest(type: "Post", path: "/feed?published=:published") {
+          id
+          title
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'feed',
+        query: feedQuery,
+        variables: { published: false },
+      }),
+    );
+
+    expect(data.post.title).toBe(post.title);
+  });
+
+  it('can pass param with `null` value to a query with a variable', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const person = { name: 'John' };
+    fetchMock.get('/api/people?address=null', person);
+
+    const peopleWithoutAddressQuery = gql`
+      query feed {
+        people(address: $address)
+          @rest(type: "Person", path: "/people?address=:address") {
+          name
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'feed',
+        query: peopleWithoutAddressQuery,
+        variables: { address: null },
+      }),
+    );
+
+    expect(data.people.name).toBe(person.name);
   });
 
   it('can hit two endpoints!', async () => {
@@ -1090,6 +1192,55 @@ describe('Query single call', () => {
       post: { ...postWithNest, __typename: 'Post' },
     });
   });
+
+  it('can build the path using pathBuilder', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+    const posts = [{ id: '1', title: 'Love apollo' }];
+    fetchMock.get('/api/posts?status=published', posts);
+
+    const postTitleQuery = gql`
+      query postTitle($pathFunction: any, $status: String) {
+        posts(status: $status) @rest(type: "Post", pathBuilder: $pathFunction) {
+          id
+          title
+        }
+      }
+    `;
+
+    function createPostsPath(variables) {
+      const qs = Object.keys(
+        variables,
+      ).reduce((acc: string, key: string): string => {
+        if (variables[key] === null || variables[key] === undefined) {
+          return acc;
+        }
+        if (acc === '') {
+          return '?' + key + '=' + encodeURIComponent(String(variables[key]));
+        }
+        return (
+          acc + '&' + key + '=' + encodeURIComponent(String(variables[key]))
+        );
+      }, '');
+      return '/posts' + qs;
+    }
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTitleQuery,
+        variables: {
+          status: 'published',
+          pathFunction: createPostsPath,
+        },
+      }),
+    );
+
+    expect(data).toMatchObject({
+      posts: [{ ...posts[0], __typename: 'Post' }],
+    });
+  });
 });
 
 describe('Query multiple calls', () => {
@@ -1099,7 +1250,6 @@ describe('Query multiple calls', () => {
 
   it('can run a query with multiple rest calls', async () => {
     expect.assertions(2);
-    ``;
 
     const link = new RestLink({ uri: '/api' });
 
@@ -1834,8 +1984,8 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
-    it('corrects names to snake-case for link-level denormalizer', async () => {
-      expect.assertions(2);
+    it('corrects names to snake_case for link-level denormalizer', async () => {
+      expect.assertions(3);
 
       const link = new RestLink({
         uri: '/api',
@@ -1862,9 +2012,6 @@ describe('Mutation', () => {
             id
             titleString
             categoryId
-            # Add Workaround Fields
-            title_string
-            category_id
           }
         }
       `;
@@ -1875,20 +2022,22 @@ describe('Mutation', () => {
           variables: { input: camelPost },
         }),
       );
-      expect(response.data.publishedPost).toEqual(
-        expect.objectContaining(resultPost),
-      );
 
       const requestCall = fetchMock.calls('/api/posts/new')[0];
+
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(intermediatePost),
         }),
       );
+      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
+      );
     });
-    it('corrects names to snake-case for request-level denormalizer', async () => {
-      expect.assertions(2);
+    it('corrects names to snake_case for request-level denormalizer', async () => {
+      expect.assertions(3);
 
       const link = new RestLink({
         uri: '/api',
@@ -1905,7 +2054,7 @@ describe('Mutation', () => {
       const createPostMutation = gql`
         fragment PublishablePostInput on REST {
           titleString: String
-          categoryId: Number
+          categoryId: Int
         }
 
         mutation publishPost($input: PublishablePostInput!) {
@@ -1919,9 +2068,6 @@ describe('Mutation', () => {
             id
             titleString
             categoryId
-            # Add Workaround Fields
-            title_string
-            category_id
           }
         }
       `;
@@ -1932,16 +2078,18 @@ describe('Mutation', () => {
           variables: { input: camelPost, requestLevelDenormalizer: snake_case },
         }),
       );
-      expect(response.data.publishedPost).toEqual(
-        expect.objectContaining(resultPost),
-      );
 
       const requestCall = fetchMock.calls('/api/posts/new')[0];
+
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(intermediatePost),
         }),
+      );
+      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
       );
     });
   });
@@ -1967,7 +2115,7 @@ describe('Mutation', () => {
       const resultPost = { __typename: 'Post', ...post };
 
       const createPostMutation = gql`
-        fragment Item on PublishablePostInput {
+        fragment Item on any {
           name: String
         }
 
@@ -2165,7 +2313,10 @@ describe('export directive', () => {
       );
     } catch (e) {
       expect(e.message).toBe(
-        'Missing params to run query, specify it in the query params or use an export directive',
+        'Missing parameters to run query, specify it in the query params or use ' +
+          'an export directive. (If you need to use ":" inside a variable string' +
+          ' make sure to encode the variables properly using `encodeURIComponent' +
+          '`. Alternatively see documentation about using pathBuilder.)',
       );
     }
   });
@@ -2191,7 +2342,7 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await makePromise(
+    const { data } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTagExport,
@@ -2275,5 +2426,170 @@ describe('Apollo client integration', () => {
     });
 
     expect(data.post).toBeDefined();
+  });
+
+  it('treats absent response fields as optional', async done => {
+    // Discovered in: https://github.com/apollographql/apollo-link-rest/issues/74
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = {
+      id: '1',
+      title: 'Love apollo',
+      content: 'Best graphql client ever.',
+    };
+    const comments = [{ id: 'c.12345', text: 'This is great.' }];
+    fetchMock.get('/api/post/1', post);
+    fetchMock.get('/api/post/1/comments', comments);
+
+    const postTitleQuery = gql`
+      query postTitle {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+          unfairCriticism
+          comments @rest(type: "Comment", path: "/post/1/comments") {
+            id
+            text
+            spammyContent
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postWithContent',
+        query: postTitleQuery,
+      }),
+    );
+
+    expect(data.post.unfairCriticism).toBeNull();
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link,
+    });
+
+    const { data: data2 }: { data: any } = await client.query({
+      query: postTitleQuery,
+    });
+    expect(data2.post.unfairCriticism).toBeNull();
+
+    const errorLink = onError(opts => {
+      console.error(opts);
+      const { networkError, graphQLErrors } = opts;
+      expect(
+        networkError || (graphQLErrors && graphQLErrors.length > 0),
+      ).toBeTruthy();
+    });
+    const combinedLink = ApolloLink.from([
+      new RestLink({
+        uri: '/api',
+        typePatcher: {
+          Post: (
+            data: any,
+            outerType: string,
+            patchDeeper: RestLink.FunctionalTypePatcher,
+          ): any => {
+            // Let's make unfairCriticism a Required Field
+            if (data.unfairCriticism == null) {
+              throw new Error(
+                'Required Field: unfairCriticism missing in RESTResponse.',
+              );
+            }
+            return data;
+          },
+        },
+      }),
+      errorLink,
+    ]);
+    const client3 = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: combinedLink,
+    });
+    try {
+      const result = await client3.query({
+        query: postTitleQuery,
+      });
+      const { errors } = result;
+      if (errors && errors.length > 0) {
+        throw new Error('All is well, errors were thrown as expected');
+      }
+      done.fail('query should throw some sort of error');
+    } catch (error) {
+      done();
+    }
+  });
+
+  it('can catch HTTP Status errors', async done => {
+    const link = new RestLink({ uri: '/api' });
+
+    const status = 404;
+
+    // setup onError link
+    const errorLink = onError(opts => {
+      const { networkError } = opts;
+      if (networkError != null) {
+        //console.debug(`[Network error]: ${networkError}`);
+        const { statusCode } = networkError as RestLink.ServerError;
+        expect(statusCode).toEqual(status);
+      }
+    });
+    const combinedLink = ApolloLink.from([errorLink, link]);
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: combinedLink,
+    });
+
+    fetchMock.mock('/api/post/1', {
+      status,
+      body: { id: 1 },
+    });
+
+    try {
+      await client.query({
+        query: sampleQuery,
+      });
+      done.fail('query should throw a network error');
+    } catch (error) {
+      done();
+    }
+  });
+
+  it('supports being cancelled and does not throw', done => {
+    class AbortError extends Error {
+      constructor(message) {
+        super(message);
+        this.name = message;
+      }
+    }
+    const customFetch = () =>
+      new Promise((_, reject) => {
+        reject(new AbortError('AbortError'));
+      });
+
+    const link = new RestLink({
+      uri: '/api',
+      customFetch: customFetch as any,
+    });
+
+    const sub = execute(link, { query: sampleQuery }).subscribe({
+      next: () => {
+        done.fail('result should not have been called');
+      },
+      error: e => {
+        done.fail(e);
+      },
+      complete: () => {
+        done.fail('complete should not have been called');
+      },
+    });
+
+    setTimeout(() => {
+      sub.unsubscribe();
+      done();
+    }, 0);
   });
 });

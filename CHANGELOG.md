@@ -2,6 +2,36 @@
 
 ## Versions
 
+### v0.next
+
+### v0.2.4
+
+- Enable JSDoc comments for TypeScript!
+- Add in-repo copy of docs so PRs can make changes to docs in sync with implementation changes.
+- Fixed a bug with recursive type-patching around arrays.
+- Fixed a bug in default URI assignment! [#91](https://github.com/apollographql/apollo-link-rest/pull/91)
+
+### v0.2.3
+
+- Fix: react-native: Android boolean responses being iterated by fieldNameNormalizer throws an error [#89](https://github.com/apollographql/apollo-link-rest/issues/89)
+
+### v0.2.2
+
+- Fix: Queries with Arrays & omitted fields would treat those fields as required (and fail) [#85](https://github.com/apollographql/apollo-link-rest/issues/85)
+
+### v0.2.1
+
+- Fix: Query throws an error when path-parameter is falsy [#82](https://github.com/apollographql/apollo-link-rest/issues/82)
+- Fix: Concurrency bug when multiple requests are in flight and both use `@export(as:)` [#81](https://github.com/apollographql/apollo-link-rest/issues/81)
+- Fix: fieldNameNormalizer/fieldNameDenormalizer should now be working! [#80](https://github.com/apollographql/apollo-link-rest/issues/80)
+- Improvement: Jest should now report code-coverage correctly for Unit Tests on PRs!
+
+### v0.2.0
+
+- Feature: Support Handling Non-success HTTP Status Codes
+- Feature: Dynamic Paths & Query building using `pathBuilder`
+- Improvement: Sourcemaps should now be more TypeScript aware (via rollup changes) see [#76](https://github.com/apollographql/apollo-link-rest/issues/76) for more up-to-date info.
+
 ### v0.1.0
 
 Dropping the alpha tag, but keeping the pre-1.0 nature of this project!

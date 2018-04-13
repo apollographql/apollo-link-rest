@@ -1,4 +1,12 @@
-import { OperationTypeNode } from 'graphql';
+import {
+  OperationTypeNode,
+  OperationDefinitionNode,
+  FragmentDefinitionNode,
+  // Query Nodes
+  DirectiveNode,
+  FieldNode,
+  SelectionSetNode,
+} from 'graphql';
 import {
   ApolloLink,
   Observable,
@@ -9,7 +17,13 @@ import {
 import {
   hasDirectives,
   getMainDefinition,
+  getFragmentDefinitions,
+  createFragmentMap,
   addTypenameToDocument,
+  FragmentMap,
+  isField,
+  isInlineFragment,
+  resultKeyNameFromField,
 } from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
@@ -48,6 +62,17 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
+  /**
+   * Used for any Error from the server when requests:
+   * - terminate with HTTP Status >= 300
+   * - and the response contains no data or errors
+   */
+  export type ServerError = Error & {
+    response: Response;
+    result: Promise<string>;
+    statusCode: number;
+  };
+
   export type Options = {
     /**
      * The URI to use when fetching operations.
@@ -68,6 +93,9 @@ export namespace RestLink {
 
     /**
      * A function that takes the response field name and converts it into a GraphQL compliant name
+     * 
+     * @note This is called *before* @see typePatcher so that it happens after
+     *       optional-field-null-insertion.
      */
     fieldNameNormalizer?: FieldNameNormalizer;
 
@@ -79,6 +107,12 @@ export namespace RestLink {
 
     /**
      * Structure to allow you to specify the __typename when you have nested objects in your REST response!
+     *
+     * If you want to force Required Properties, you can throw an error in your patcher,
+     *  or `delete` a field from the data response provided to your typePatcher function!
+     *
+     * @note: This is called *after* @see fieldNameNormalizer because that happens
+     *        after optional-nulls insertion, and those would clobber normalized names.
      * 
      * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
      *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
@@ -106,16 +140,28 @@ export namespace RestLink {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     /** What GraphQL type to name the response */
     type?: string;
-    /** What path to use */
-    path: string;
+    /**
+     * What path (including query) to use
+     * - @optional if you provide @see DirectiveOptions.pathBuilder
+     */
+    path?: string;
     /**
      * What endpoint to select from the map of endpoints available to this link.
      * @default `RestLink.endpoints[DEFAULT_ENDPOINT_KEY]`
      */
     endpoint?: string;
     /**
+     * Function that constructs a request path out of the Environmental
+     *  state when processing this @rest(...) call.
+     *
+     * - @optional if you provide: @see DirectiveOptions.path
+     * - **note**: this does not do any URI encoding on the result, so be aware if you're
+     *  making a query-string!
+     */
+    pathBuilder?: (args: object) => string;
+    /**
      * Optional method that constructs a RequestBody out of the Environmental state
-     * when processing this @rest(...) call. 
+     * when processing this @rest(...) call.
      * @default function that extracts the bodyKey from the args.
      */
     bodyBuilder?: (args: object) => object;
@@ -164,6 +210,163 @@ const addTypeNameToResult = (
   return typePatcher(result, __typename, typePatcher);
 };
 
+const quickFindRestDirective = (field: FieldNode): DirectiveNode | null => {
+  if (field.directives && field.directives.length) {
+    return field.directives.find(directive => 'rest' === directive.name.value);
+  }
+  return null;
+};
+/**
+ * The way graphql works today, it doesn't hand us the AST tree for our query, it hands us the ROOT
+ * This method searches for REST-directive-attached nodes that are named to match this query.
+ *
+ * A little bit of wasted compute, but alternative would be a patch in graphql-anywhere.
+ *
+ * @param resultKey SearchKey for REST directive-attached item matching this sub-query
+ * @param current current node in the REST-JSON-response
+ * @param mainDefinition Parsed Query Definition
+ * @param fragmentMap Map of Named Fragments
+ * @param currentSelectionSet Current selection set we're filtering by
+ */
+function findRestDirectivesThenInsertNullsForOmittedFields(
+  resultKey: string,
+  current: any[] | object, // currentSelectionSet starts at root, so wait until we're inside a Field tagged with an @rest directive to activate!
+  mainDefinition: OperationDefinitionNode | FragmentDefinitionNode,
+  fragmentMap: FragmentMap,
+  currentSelectionSet: SelectionSetNode,
+): any[] | object {
+  if (current == null || currentSelectionSet == null) {
+    return current;
+  }
+  currentSelectionSet.selections.forEach(node => {
+    if (isInlineFragment(node)) {
+      findRestDirectivesThenInsertNullsForOmittedFields(
+        resultKey,
+        current,
+        mainDefinition,
+        fragmentMap,
+        node.selectionSet,
+      );
+    } else if (node.kind === 'FragmentSpread') {
+      const fragment = fragmentMap[node.name.value];
+      findRestDirectivesThenInsertNullsForOmittedFields(
+        resultKey,
+        current,
+        mainDefinition,
+        fragmentMap,
+        fragment.selectionSet,
+      );
+    } else if (isField(node)) {
+      const name = resultKeyNameFromField(node);
+      if (name === resultKey && quickFindRestDirective(node) != null) {
+        // Jackpot! We found our selectionSet!
+        insertNullsForAnyOmittedFields(
+          current,
+          mainDefinition,
+          fragmentMap,
+          node.selectionSet,
+        );
+      } else {
+        findRestDirectivesThenInsertNullsForOmittedFields(
+          resultKey,
+          current,
+          mainDefinition,
+          fragmentMap,
+          node.selectionSet,
+        );
+      }
+    } else {
+      // This will give a TypeScript build-time error if you did something wrong or the AST changes!
+      return ((node: never): never => {
+        throw new Error('Unhandled Node Type in SelectionSetNode.selections');
+      })(node);
+    }
+  });
+  // Return current to have our result pass to next link in async promise chain!
+  return current;
+}
+/**
+ * Recursively walks a handed object in parallel with the Query SelectionSet,
+ *  and inserts `null` for any field that is missing from the response.
+ *
+ * This is needed because ApolloClient will throw an error automatically if it's
+ *  missing -- effectively making all of rest-link's selections implicitly non-optional.
+ *
+ * If you want to implement required fields, you need to use typePatcher to *delete*
+ *  fields when they're null and you want the query to fail instead.
+ *
+ * @param current Current object we're patching
+ * @param mainDefinition Parsed Query Definition
+ * @param fragmentMap Map of Named Fragments
+ * @param currentSelectionSet Current selection set we're filtering by
+ */
+function insertNullsForAnyOmittedFields(
+  current: any[] | object, // currentSelectionSet starts at root, so wait until we're inside a Field tagged with an @rest directive to activate!
+  mainDefinition: OperationDefinitionNode | FragmentDefinitionNode,
+  fragmentMap: FragmentMap,
+  currentSelectionSet: SelectionSetNode,
+): void {
+  if (current == null || currentSelectionSet == null) {
+    return;
+  }
+  if (Array.isArray(current)) {
+    // If our current value is an array, process our selection set for each entry.
+    current.forEach(c =>
+      insertNullsForAnyOmittedFields(
+        c,
+        mainDefinition,
+        fragmentMap,
+        currentSelectionSet,
+      ),
+    );
+    return;
+  }
+  currentSelectionSet.selections.forEach(node => {
+    if (isInlineFragment(node)) {
+      insertNullsForAnyOmittedFields(
+        current,
+        mainDefinition,
+        fragmentMap,
+        node.selectionSet,
+      );
+    } else if (node.kind === 'FragmentSpread') {
+      const fragment = fragmentMap[node.name.value];
+      insertNullsForAnyOmittedFields(
+        current,
+        mainDefinition,
+        fragmentMap,
+        fragment.selectionSet,
+      );
+    } else if (isField(node)) {
+      const value = current[node.name.value];
+      if (node.name.value === '__typename') {
+        // Don't mess with special fields like __typename
+      } else if (typeof value === 'undefined') {
+        // Patch in a null where the field would have been marked as missing
+        current[node.name.value] = null;
+      } else if (
+        value != null &&
+        typeof value === 'object' &&
+        node.selectionSet != null
+      ) {
+        insertNullsForAnyOmittedFields(
+          value,
+          mainDefinition,
+          fragmentMap,
+          node.selectionSet,
+        );
+      } else {
+        // Other types (string, number) do not need recursive patching!
+      }
+    } else {
+      // This will give a TypeScript build-time error if you did something wrong or the AST changes!
+      return ((node: never): never => {
+        throw new Error('Unhandled Node Type in SelectionSetNode.selections');
+      })(node);
+    }
+  });
+}
+
 const getURIFromEndpoints = (
   endpoints: RestLink.Endpoints,
   endpoint: RestLink.Endpoint,
@@ -179,7 +382,7 @@ const replaceParam = (
   name: string,
   value: string,
 ): string => {
-  if (!value || !name) {
+  if (value === undefined || name === undefined) {
     return endpoint;
   }
   return endpoint.replace(`:${name}`, value);
@@ -193,21 +396,27 @@ const noMangleKeys = ['__typename'];
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
-  converter: RestLink.FieldNameNormalizer,
+  __converter: RestLink.FieldNameNormalizer,
   keypath: string[] = [],
 ): object => {
-  let convert: RestLink.FieldNameNormalizer = null;
-  if (converter.prototype.arity != 2) {
-    convert = (name, keypath) => {
-      return converter(name);
+  let converter: RestLink.FieldNameNormalizer = null;
+  if (__converter.prototype.arity != 2) {
+    converter = (name, keypath) => {
+      return __converter(name);
     };
   } else {
-    convert = converter;
+    converter = __converter;
   }
 
-  if (['string', 'number'].indexOf(typeof object) != -1) {
-    // Object is a scalar, no keys to convert!
+  if (object == null || typeof object !== 'object') {
+    // Object is a scalar or null / undefined => no keys to convert!
     return object;
+  }
+
+  if (Array.isArray(object)) {
+    return object.map((o, index) =>
+      convertObjectKeys(o, converter, [...keypath, String(index)]),
+    );
   }
 
   return Object.keys(object).reduce((acc: any, key: string) => {
@@ -218,13 +427,12 @@ const convertObjectKeys = (
       return acc;
     }
 
-    const nestedKeyPath = keypath.concat([key]);
-    if (Array.isArray(value)) {
-      value = value.map(e => convertObjectKeys(e, converter, nestedKeyPath));
-    } else if (typeof value === 'object') {
-      value = convertObjectKeys(value, converter, nestedKeyPath);
-    }
-    acc[convert(key, nestedKeyPath)] = value;
+    const nestedKeyPath = [...keypath, key];
+    acc[converter(key, nestedKeyPath)] = convertObjectKeys(
+      value,
+      converter,
+      nestedKeyPath,
+    );
     return acc;
   }, {});
 };
@@ -273,7 +481,7 @@ export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
  * This merge policy deletes any matching headers from the link's default headers.
  * - Pass headersToOverride array & a headers arg to context and this policy will automatically be selected.
  */
-export const overrideHeadersMergePolicyHelper = (
+export const overrideHeadersMergePolicy = (
   linkHeaders: Headers,
   headersToOverride: string[],
   requestHeaders: Headers | null,
@@ -287,11 +495,13 @@ export const overrideHeadersMergePolicyHelper = (
   });
   return concatHeadersMergePolicy(result, requestHeaders || new Headers());
 };
+export const overrideHeadersMergePolicyHelper = overrideHeadersMergePolicy; // Deprecated name
+
 const makeOverrideHeadersMergePolicy = (
   headersToOverride: string[],
 ): RestLink.HeadersMergePolicy => {
   return (linkHeaders, requestHeaders) => {
-    return overrideHeadersMergePolicyHelper(
+    return overrideHeadersMergePolicy(
       linkHeaders,
       headersToOverride,
       requestHeaders,
@@ -326,7 +536,25 @@ export const validateRequestMethodForOperationType = (
   }
 };
 
-let exportVariables = {};
+/**
+ * Utility to build & throw a JS Error from a "failed" REST-response
+ * @param response: HTTP Response object for this request
+ * @param result: Promise that will render the body of the response
+ * @param message: Human-facing error message
+ */
+const rethrowServerSideError = (
+  response: Response,
+  result: Promise<string>,
+  message: string,
+) => {
+  const error = new Error(message) as RestLink.ServerError;
+
+  error.response = response;
+  error.statusCode = response.status;
+  error.result = result;
+
+  throw error;
+};
 
 /** Apollo-Link getContext, provided from the user & mutated by upstream links */
 interface LinkChainContext {
@@ -351,10 +579,16 @@ interface RequestContext {
   /** Credentials Policy for Fetch */
   credentials?: RequestCredentials | null;
 
+  /** Exported variables fulfilled in this request, using @export(as:) */
+  exportVariables: { [key: string]: any };
+
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
+  fieldNameNormalizer: RestLink.FieldNameNormalizer;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  mainDefinition: OperationDefinitionNode | FragmentDefinitionNode;
+  fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
 }
 
@@ -381,9 +615,7 @@ const resolver: Resolver = async (
   info: ExecInfo,
 ) => {
   const { directives, isLeaf, resultKey } = info;
-  if (root === null) {
-    exportVariables = {};
-  }
+  const { exportVariables } = context;
 
   let currentNode = (root || {})[resultKey];
   if (root && directives && directives.export) {
@@ -407,21 +639,54 @@ const resolver: Resolver = async (
     customFetch,
     operationType,
     typePatcher,
+    mainDefinition,
+    fragmentDefinitions,
+    fieldNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
   } = context;
-  const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
+
+  const fragmentMap = createFragmentMap(fragmentDefinitions);
+
+  let {
+    path,
+    endpoint,
+    pathBuilder,
+  } = directives.rest as RestLink.DirectiveOptions;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
     const argsWithExport = { ...args, ...exportVariables };
-    let pathWithParams = Object.keys(argsWithExport).reduce(
-      (acc, e) => replaceParam(acc, e, argsWithExport[e]),
-      path,
-    );
-    if (pathWithParams.includes(':')) {
+
+    const bothPathsProvided = path != null && pathBuilder != null;
+    const neitherPathsProvided = path == null && pathBuilder == null;
+
+    if (bothPathsProvided || neitherPathsProvided) {
+      const pathBuilderState = bothPathsProvided
+        ? 'both, please remove one!'
+        : 'neither, please add one!';
       throw new Error(
-        'Missing params to run query, specify it in the query params or use an export directive',
+        `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
+          `This request had ${pathBuilderState}`,
       );
     }
+    if (!pathBuilder) {
+      pathBuilder = (args: object): string => {
+        const pathWithParams = Object.keys(args).reduce(
+          (acc, e) => replaceParam(acc, e, args[e]),
+          path,
+        );
+        if (pathWithParams.includes(':')) {
+          throw new Error(
+            'Missing parameters to run query, specify it in the query params or use ' +
+              'an export directive. (If you need to use ":" inside a variable string' +
+              ' make sure to encode the variables properly using `encodeURIComponent' +
+              '`. Alternatively see documentation about using pathBuilder.)',
+          );
+        }
+        return pathWithParams;
+      };
+    }
+    const pathWithParams = pathBuilder(argsWithExport);
+
     let {
       method,
       type,
@@ -463,14 +728,40 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
       headers,
       body: body && JSON.stringify(body),
     })
+      .then(res => {
+        if (res.status >= 300) {
+          // Throw a JSError, that will be available under the
+          // "Network error" category in apollo-link-error
+          rethrowServerSideError(
+            res,
+            res.text(),
+            `Response not successful: Received status code ${res.status}`,
+          );
+        }
+        return res;
+      })
       .then(res => res.json())
+      .then(
+        result =>
+          fieldNameNormalizer == null
+            ? result
+            : convertObjectKeys(result, fieldNameNormalizer),
+      )
+      .then(result =>
+        findRestDirectivesThenInsertNullsForOmittedFields(
+          resultKey,
+          result,
+          mainDefinition,
+          fragmentMap,
+          mainDefinition.selectionSet,
+        ),
+      )
       .then(result => addTypeNameToResult(result, type, typePatcher));
   } catch (error) {
     throw error;
@@ -521,7 +812,7 @@ export class RestLink extends ApolloLink {
           "RestLink was configured with a default uri that doesn't match what's passed in to the endpoints map.",
         );
       }
-      this.endpoints[DEFAULT_ENDPOINT_KEY] == uri;
+      this.endpoints[DEFAULT_ENDPOINT_KEY] = uri;
     }
 
     if (this.endpoints[DEFAULT_ENDPOINT_KEY] == null) {
@@ -551,13 +842,14 @@ export class RestLink extends ApolloLink {
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
       ) => {
+        const __typename = data.__typename || outerType;
         if (Array.isArray(data)) {
-          return data.map(d => patchDeeper(d, outerType, patchDeeper));
+          return data.map(d => patchDeeper(d, __typename, patchDeeper));
         }
-        const subPatcher = table[outerType] || (result => result);
+        const subPatcher = table[__typename] || (result => result);
         return {
-          __typename: outerType || data.__typename,
-          ...subPatcher(data, outerType, patchDeeper),
+          __typename,
+          ...subPatcher(data, __typename, patchDeeper),
         };
       };
     } else {
@@ -607,33 +899,33 @@ export class RestLink extends ApolloLink {
 
     const queryWithTypename = addTypenameToDocument(query);
 
+    const mainDefinition = getMainDefinition(query);
+    const fragmentDefinitions = getFragmentDefinitions(query);
+
     const operationType: OperationTypeNode =
-      (getMainDefinition(query) || ({} as any)).operation || 'query';
+      (mainDefinition || ({} as any)).operation || 'query';
 
-    let resolverOptions: {
-      resultMapper?: (fields: any) => any;
-    } = {};
-    if (this.fieldNameNormalizer) {
-      resolverOptions.resultMapper = resultFields => {
-        return convertObjectKeys(resultFields, this.fieldNameNormalizer);
-      };
-    }
-
+    const requestContext: RequestContext = {
+      headers,
+      endpoints: this.endpoints,
+      // Provide an empty hash for this request's exports to be stuffed into
+      exportVariables: {},
+      credentials,
+      customFetch: this.customFetch,
+      operationType,
+      fieldNameNormalizer: this.fieldNameNormalizer,
+      fieldNameDenormalizer: this.fieldNameDenormalizer,
+      mainDefinition,
+      fragmentDefinitions,
+      typePatcher: this.typePatcher,
+    };
+    const resolverOptions = {};
     return new Observable(observer => {
       graphql(
         resolver,
         queryWithTypename,
         null,
-        {
-          headers,
-          endpoints: this.endpoints,
-          export: exportVariables,
-          credentials,
-          customFetch: this.customFetch,
-          operationType,
-          fieldNameDenormalizer: this.fieldNameDenormalizer,
-          typePatcher: this.typePatcher,
-        },
+        requestContext,
         variables,
         resolverOptions,
       )
@@ -642,6 +934,10 @@ export class RestLink extends ApolloLink {
           observer.complete();
         })
         .catch(err => {
+          if (err.name === 'AbortError') return;
+          if (err.result && err.result.errors) {
+            observer.next(err.result);
+          }
           observer.error(err);
         });
     });
