@@ -171,6 +171,12 @@ export namespace RestLink {
      * @see https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
      */
     bodyKey?: string;
+
+    /**
+     * Optional field that prepares the request body for transport.
+     * @default function that serializes from JSON.
+     */
+    bodySerializer?: (args: object) => object;
     /**
      * A per-request name denormalizer, this permits special endpoints to have their
      * field names remapped differently from the default.
@@ -714,6 +720,7 @@ const resolver: Resolver = async (
       bodyBuilder,
       bodyKey,
       fieldNameDenormalizer: perRequestNameDenormalizer,
+      bodySerializer,
     } = directives.rest as RestLink.DirectiveOptions;
     if (!method) {
       method = 'GET';
@@ -753,7 +760,7 @@ const resolver: Resolver = async (
       credentials,
       method,
       headers,
-      body: body && JSON.stringify(body),
+      body: body && (bodySerializer || JSON.stringify).call(null, body),
     })
       .then(async res => {
         if (res.status >= 300) {

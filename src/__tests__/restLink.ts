@@ -2431,6 +2431,127 @@ describe('Mutation', () => {
       );
     });
   });
+
+  describe('bodySerializer', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+
+    it('defaults to json serialization for objects', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      //body containing Primitives, Objects and Arrays types
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            id
+            title
+            items
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(requestCall[1].body).toEqual(JSON.stringify(post));
+    });
+
+    it('respects custom body serializers', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({ uri: '/api' });
+
+      //body containing Primitives, Objects and Arrays types
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+        }
+
+        mutation publishPost(
+          $input: PublishablePostInput!
+          $bodySerializer: any
+        ) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/newComplexPost"
+              method: "POST"
+              bodySerializer: $bodySerializer
+            ) {
+            id
+            title
+            items
+          }
+        }
+      `;
+
+      // A custom serializer that always returns the same value
+      const constSerializer = () => 42;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post, bodySerializer: constSerializer },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(requestCall[1].body).toEqual(42);
+    });
+  });
 });
 
 describe('validateRequestMethodForOperationType', () => {
