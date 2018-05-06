@@ -43,7 +43,7 @@
       "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
   },
   "dependencies": {
-    "apollo-link": "^1.0.7",
+    "apollo-link": "1.0.7",
     "graphql-anywhere": "^4.1.0-alpha.0"
   },
   "peerDependencies": {
