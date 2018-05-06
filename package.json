@@ -42,12 +42,10 @@
     "check-types":
       "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
   },
-  "dependencies": {
-    "apollo-link": "1.0.7",
-    "graphql-anywhere": "^4.1.0-alpha.0"
-  },
   "peerDependencies": {
-    "graphql": "0.11.7 || ^0.12.3"
+    "apollo-link": ">=1",
+    "graphql": ">=0.11",
+    "graphql-anywhere": ">=4"
   },
   "devDependencies": {
     "@types/graphql": "0.11.5",
@@ -55,6 +53,7 @@
     "@types/node": "8.x",
     "apollo-cache-inmemory": "1.1.x",
     "apollo-client": "2.2.x",
+    "apollo-link": "1.0.7",
     "apollo-link-error": "1.0.x",
     "apollo-link-http": "1.5.x",
     "browserify": "14.5.0",
@@ -64,6 +63,7 @@
     "danger": "1.2.0",
     "fetch-mock": "^5.13.1",
     "graphql": "0.11.7",
+    "graphql-anywhere": "^4.1.0-alpha.0",
     "graphql-tag": "2.5.0",
     "jest": "21.2.1",
     "jest-fetch-mock": "^1.4.0",
