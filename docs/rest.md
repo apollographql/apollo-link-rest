@@ -90,6 +90,7 @@ Construction of `RestLink` takes an options object to customize the behavior of 
 * `fieldNameNormalizer?: /function/`: _optional_ function that takes the response field name and converts it into a GraphQL compliant name. -- This is useful if your `REST` API returns fields that aren't representable as GraphQL, or if you want to convert between `snake_case` field names in JSON to `camelCase` keyed fields.
 * `fieldNameDenormalizer?: /function/`: _optional_ function that takes a GraphQL-compliant field name and converts it back into an endpoint-specific name.
 * `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
+* `bodySerializer?: /function/`: _optional_ function that takes the body of the request directly before it is passed to the fetch call. Defaults to `JSON.stringify`.
 
 <h3 id="options.endpoints">Multiple endpoints</h3>
 
@@ -272,6 +273,13 @@ Here is one way you might customize `RestLink`:
         bodySnippet...
       }
     },
+    bodySerializer: (body: any) => {
+      const formData = new FormData();
+      for (let key in body) {
+        formData.append(key, body[key]);
+      }
+      return formData;
+    }
   });
 ```
 
