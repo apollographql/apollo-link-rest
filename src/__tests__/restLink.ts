@@ -2110,6 +2110,35 @@ describe('Apollo client integration', () => {
     expect(data.post).toBeDefined();
   });
 
+  it('has an undefined body on GET requests', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.get('/api/post/1', post);
+
+    const postTagExport = gql`
+      query {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+        }
+      }
+    `;
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link,
+    });
+
+    await client.query({
+      query: postTagExport,
+    });
+
+    expect(fetchMock.lastCall()[1].body).toBeUndefined();
+  });
+
   it('treats absent response fields as optional', async done => {
     // Discovered in: https://github.com/apollographql/apollo-link-rest/issues/74
 

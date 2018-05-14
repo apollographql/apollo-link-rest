@@ -676,7 +676,7 @@ const resolver: Resolver = async (
       method = 'GET';
     }
 
-    let body = null;
+    let body = undefined;
     if (
       -1 === ['GET', 'DELETE'].indexOf(method) &&
       operationType === 'mutation'
