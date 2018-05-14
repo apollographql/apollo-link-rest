@@ -85,6 +85,10 @@ REST Link uses the `headers` field on the context to allow passing headers to th
 - `headers`: an object representing values to be sent as headers on the request
 - `credentials`: a string representing the credentials policy you want for the fetch call
 
+## Documentation
+
+For a complete `apollo-link-rest` reference visit the documentation website at: https://www.apollographql.com/docs/link/links/rest.html
+
 ## Contributing
 
 This project uses TypeScript to bring static types to JavaScript and uses Jest for testing. To get started, clone the repo and run the following commands:
