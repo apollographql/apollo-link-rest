@@ -1717,6 +1717,92 @@ describe('Mutation', () => {
     });
   });
 
+  describe('empty response bodies', () => {
+    afterEach(() => {
+      fetchMock.restore();
+    });
+    it('returns an empty object on 204 status', async () => {
+      // In truth this test is just for show, because the fetch implementation
+      // used in the tests already returns {} from res.json() for 204 responses
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts', {
+        status: 204,
+        body: post,
+      });
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts", method: "POST") {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
+      );
+
+      expect(response.data.publishedPost).toEqual({
+        __typename: 'Post',
+        id: null,
+        title: null,
+      });
+    });
+    it('returns an empty object on zero Content-Length', async () => {
+      // In Node.js parsing an empty body doesn't throw an error, so the best test is
+      // to provide body data and ensure the zero length still triggers the empty response
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts', {
+        headers: { 'Content-Length': 0 },
+        body: post,
+      });
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts", method: "POST") {
+            id
+            title
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
+      );
+
+      expect(response.data.publishedPost).toEqual({
+        __typename: 'Post',
+        id: null,
+        title: null,
+      });
+    });
+  });
+
   describe('fieldNameDenormalizer', () => {
     afterEach(() => {
       fetchMock.restore();

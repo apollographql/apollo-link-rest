@@ -93,7 +93,7 @@ export namespace RestLink {
 
     /**
      * A function that takes the response field name and converts it into a GraphQL compliant name
-     * 
+     *
      * @note This is called *before* @see typePatcher so that it happens after
      *       optional-field-null-insertion.
      */
@@ -113,7 +113,7 @@ export namespace RestLink {
      *
      * @note: This is called *after* @see fieldNameNormalizer because that happens
      *        after optional-nulls insertion, and those would clobber normalized names.
-     * 
+     *
      * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
      *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
      *           And consider submitting alternate solutions to the problem!
@@ -732,7 +732,9 @@ const resolver: Resolver = async (
       })
       .then(res => {
         context.responses.push(res);
-        return res.json();
+        return res.status === 204 || res.headers.get('Content-Length') === '0'
+          ? {}
+          : res.json()
       })
       .then(
         result =>
