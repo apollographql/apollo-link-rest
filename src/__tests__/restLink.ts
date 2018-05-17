@@ -16,6 +16,28 @@ import {
   normalizeHeaders,
 } from '../restLink';
 
+/** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
+const flattenHeaders: ({ headers: Headers }) => { [key: string]: string } = ({
+  headers,
+}) => {
+  const headersFlattened: { [key: string]: string } = {};
+  headers.forEach((value, key) => {
+    headersFlattened[key] = value;
+  });
+  return headersFlattened;
+};
+
+/** Helper that flattens headers & preserves duplicate objects */
+const orderDupPreservingFlattenedHeaders: (
+  { headers: Headers },
+) => string[] = ({ headers }) => {
+  const orderedFlattened = [];
+  headers.forEach((value, key) => {
+    orderedFlattened.push(`${key}: ${value}`);
+  });
+  return orderedFlattened;
+};
+
 const sampleQuery = gql`
   query post {
     post(id: "1") @rest(type: "Post", path: "/post/:id") {
@@ -1641,28 +1663,6 @@ describe('Query options', () => {
     });
   });
 
-  /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
-  const flattenHeaders: ({ headers: Headers }) => { [key: string]: string } = ({
-    headers,
-  }) => {
-    const headersFlattened: { [key: string]: string } = {};
-    headers.forEach((value, key) => {
-      headersFlattened[key] = value;
-    });
-    return headersFlattened;
-  };
-
-  /** Helper that flattens headers & preserves duplicate objects */
-  const orderDupPreservingFlattenedHeaders: (
-    { headers: Headers },
-  ) => string[] = ({ headers }) => {
-    const orderedFlattened = [];
-    headers.forEach((value, key) => {
-      orderedFlattened.push(`${key}: ${value}`);
-    });
-    return orderedFlattened;
-  };
-
   describe('headers', () => {
     it('adds headers to the request from the context', async () => {
       expect.assertions(2);
@@ -2489,8 +2489,89 @@ describe('Mutation', () => {
       expect(requestCall[1].body).toEqual(JSON.stringify(post));
     });
 
+    it('respects custom body serializers keys', async () => {
+      expect.assertions(3);
+
+      // A custom serializer that always returns the same value
+      const constSerializer = () => ({
+        body: 42,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+
+      const link = new RestLink({
+        uri: '/api',
+        additionalSerializers: {
+          const: constSerializer,
+        },
+      });
+
+      //body containing Primitives, Objects and Arrays types
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+        }
+
+        mutation publishPost(
+          $input: PublishablePostInput!
+          $bodySerializer: any
+        ) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/newComplexPost"
+              method: "POST"
+              bodySerializerKey: "const"
+            ) {
+            id
+            title
+            items
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(requestCall[1].body).toEqual(42);
+      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'content-type': 'text/plain',
+          }),
+        }),
+      );
+    });
+
     it('respects custom body serializers', async () => {
       expect.assertions(2);
+
+      // A custom serializer that always returns the same value
+      const constSerializer = () => ({ body: 42, headers: {} });
 
       const link = new RestLink({ uri: '/api' });
 
@@ -2533,9 +2614,6 @@ describe('Mutation', () => {
           }
         }
       `;
-
-      // A custom serializer that always returns the same value
-      const constSerializer = () => 42;
 
       await makePromise<Result>(
         execute(link, {
