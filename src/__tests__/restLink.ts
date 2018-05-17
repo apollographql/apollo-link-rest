@@ -2500,7 +2500,7 @@ describe('Mutation', () => {
 
       const link = new RestLink({
         uri: '/api',
-        additionalSerializers: {
+        bodySerializers: {
           const: constSerializer,
         },
       });
@@ -2536,7 +2536,7 @@ describe('Mutation', () => {
               type: "Post"
               path: "/posts/newComplexPost"
               method: "POST"
-              bodySerializerKey: "const"
+              bodySerializer: "const"
             ) {
             id
             title
@@ -2568,12 +2568,20 @@ describe('Mutation', () => {
     });
 
     it('respects custom body serializers', async () => {
-      expect.assertions(2);
+      expect.assertions(4);
 
       // A custom serializer that always returns the same value
-      const constSerializer = () => ({ body: 42, headers: {} });
+      const constSerializer = (_, headers) => ({ body: 42, headers });
 
-      const link = new RestLink({ uri: '/api' });
+      const link = new RestLink({
+        uri: '/api',
+        bodySerializers: {
+          fake: (data, headers) => ({
+            body: { ...data, isFake: true },
+            headers,
+          }),
+        },
+      });
 
       //body containing Primitives, Objects and Arrays types
       const post = {
@@ -2612,6 +2620,17 @@ describe('Mutation', () => {
             title
             items
           }
+          fakePublishedPost: publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/newComplexPost"
+              method: "POST"
+              bodySerializer: "fake"
+            ) {
+            id
+            title
+            items
+          }
         }
       `;
 
@@ -2628,6 +2647,51 @@ describe('Mutation', () => {
         expect.objectContaining({ method: 'POST' }),
       );
       expect(requestCall[1].body).toEqual(42);
+
+      const secondRequestCall = fetchMock.calls('/api/posts/newComplexPost')[1];
+      expect(secondRequestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(secondRequestCall[1].body).toEqual(
+        expect.objectContaining({ isFake: true }),
+      );
+    });
+
+    it('throws if there is no custom serializer defined', () => {
+      expect.assertions(1);
+      const link = new RestLink({
+        uri: '/api',
+      });
+
+      const createPostMutation = gql`
+        mutation CreatePost($input: any!) {
+          createPost(input: $input)
+            @rest(
+              type: "Post"
+              method: "POST"
+              path: "/posts/createPost"
+              bodySerializer: "missing"
+            ) {
+            id
+          }
+        }
+      `;
+
+      const post = { id: '1' };
+
+      return makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      ).catch(e =>
+        expect(e).toEqual(
+          new Error(
+            '"bodySerializer" must correspond to configured serializer. Please make sure to specify a serializer called missing in the "bodySerializers" property of the RestLink.',
+          ),
+        ),
+      );
     });
   });
 });

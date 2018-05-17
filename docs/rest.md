@@ -90,6 +90,8 @@ Construction of `RestLink` takes an options object to customize the behavior of 
 * `fieldNameNormalizer?: /function/`: _optional_ function that takes the response field name and converts it into a GraphQL compliant name. -- This is useful if your `REST` API returns fields that aren't representable as GraphQL, or if you want to convert between `snake_case` field names in JSON to `camelCase` keyed fields.
 * `fieldNameDenormalizer?: /function/`: _optional_ function that takes a GraphQL-compliant field name and converts it back into an endpoint-specific name.
 * `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
+* `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
+* `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. Default is JSON.
 
 
 <h3 id="options.endpoints">Multiple endpoints</h3>
@@ -434,7 +436,9 @@ mutation encryptedPost(
 
 <h5 id="rest.arguments.body.serializer">`bodySerializer`</h5>
 
-If you need to serialize your data differently (say as form-encoded), you can provide a `bodySerializer` instead of relying on the default JSON serialization
+If you need to serialize your data differently (say as form-encoded), you can provide a `bodySerializer` instead of relying on the default JSON serialization.
+`bodySerializer` can be either a function of the form `(data: any, headers: Headers) => {body: any, header: Headers}` or a string key. When using the string key
+`RestLink` will instead use the corresponding serializer from the `bodySerializers` object that can optionally be passed in during initialization.
 
 ```graphql
 mutation encryptedForm(
@@ -451,24 +455,43 @@ mutation encryptedForm(
       id
       title
     }
+
+  publishRSS(input: $input)
+    @rest(
+      type: "Post",
+      path: "/feed",
+      method: "POST",
+      bodySerializer: "xml"
+    )
 }
 ```
 
 Where `formSerializer` could be defined as
 
 ```typescript
-const formSerializer = (body: any) => {
+const formSerializer = (data: any, headers: Headers) => {
   const formData = new FormData();
-  for (let key in body) {
-    if (body.hasOwnProperty(key)) {
-      formData.append(key, body[key]);
+  for (let key in data) {
+    if (data.hasOwnProperty(key)) {
+      formData.append(key, data[key]);
     }
   }
 
-  return formData;
+  headers.set('Content-Type', 'application/x-www-form-urlencoded');
+
+  return {body: formData, headers};
 }
 
 ```
+
+And `"xml"` would have been defined on the `RestLink` directly
+
+const restLink = new RestLink({
+ ...otherOptions,
+ bodySerializers: {
+   xml: xmlSerializer
+ }
+})
 
 
 <h2 id="export">@export directive</h2>

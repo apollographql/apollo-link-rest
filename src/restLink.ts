@@ -27,7 +27,6 @@ import {
 } from 'apollo-utilities';
 import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
 import { Resolver } from 'graphql-anywhere';
-import HeadersHash = RestLink.HeadersHash;
 
 export namespace RestLink {
   export type URI = string;
@@ -64,7 +63,7 @@ export namespace RestLink {
   }
 
   export interface Serializer {
-    (data: any): SerializedBody;
+    (data: any, headers: Headers): SerializedBody;
   }
 
   export interface Serializers {
@@ -148,7 +147,7 @@ export namespace RestLink {
      * Add serializers that will serialize the body before it is emitted and will pass on
      * headers to update the request.
      */
-    additionalSerializers?: Serializers;
+    bodySerializers?: Serializers;
 
     /**
      * Set the default serializer for the link
@@ -199,16 +198,10 @@ export namespace RestLink {
     bodyKey?: string;
 
     /**
-     * Optional key that specifies which serializer to use when preparing the body for transport
-     * @default if null will default to the default serializer
-     */
-    bodySerializerKey?: string;
-
-    /**
-     * Optional function that will be used to serialize the request body before transport
+     * Optional serialization function or a key that will be used look up the serializer to serialize the request body before transport.
      * @default if null will fallback to the default serializer
      */
-    bodySerializer?: RestLink.Serializer;
+    bodySerializer?: RestLink.Serializer | string;
 
     /**
      * A per-request name denormalizer, this permits special endpoints to have their
@@ -633,7 +626,6 @@ interface RequestContext {
   fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
   serializers: RestLink.Serializers;
-  headersMergePolicy: RestLink.HeadersMergePolicy;
 
   /** An array of the responses from each fetched URL */
   responses: Response[];
@@ -706,7 +698,6 @@ const resolver: Resolver = async (
     fieldNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
-    headersMergePolicy,
   } = context;
 
   const fragmentMap = createFragmentMap(fragmentDefinitions);
@@ -757,7 +748,6 @@ const resolver: Resolver = async (
       bodyBuilder,
       bodyKey,
       fieldNameDenormalizer: perRequestNameDenormalizer,
-      bodySerializerKey,
       bodySerializer,
     } = directives.rest as RestLink.DirectiveOptions;
     if (!method) {
@@ -765,7 +755,7 @@ const resolver: Resolver = async (
     }
 
     let body = undefined;
-    let additionalHeaders: Headers = undefined;
+    let overrideHeaders: Headers = undefined;
     if (
       -1 === ['GET', 'DELETE'].indexOf(method) &&
       operationType === 'mutation'
@@ -793,31 +783,31 @@ const resolver: Resolver = async (
           noOpNameNormalizer,
       );
 
-      const bothSerializersProvided =
-        bodySerializerKey != null && bodySerializer != null;
+      let serializedBody;
 
-      if (bothSerializersProvided) {
-        throw new Error(
-          'One and only one of ("bodySerializer" | "bodySerializerKey") must be set in the @rest() directive. ' +
-            'This request had both',
-        );
+      if (typeof bodySerializer === 'string') {
+        if (!serializers.hasOwnProperty(bodySerializer)) {
+          throw new Error(
+            '"bodySerializer" must correspond to configured serializer. ' +
+              `Please make sure to specify a serializer called ${bodySerializer} in the "bodySerializers" property of the RestLink.`,
+          );
+        }
+        serializedBody = serializers[bodySerializer](body, headers);
+      } else {
+        serializedBody = bodySerializer
+          ? bodySerializer(body, headers)
+          : serializers[DEFAULT_SERIALIZER_KEY](body, headers);
       }
 
-      const serializedBody = (bodySerializer
-        ? bodySerializer
-        : serializers[bodySerializerKey || DEFAULT_SERIALIZER_KEY])(body);
-
       body = serializedBody.body;
-      additionalHeaders = new Headers(serializedBody.headers);
+      overrideHeaders = new Headers(serializedBody.headers);
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
       credentials,
       method,
-      headers: additionalHeaders
-        ? headersMergePolicy(additionalHeaders, headers)
-        : headers,
+      headers: overrideHeaders || headers,
       body: body,
     })
       .then(async res => {
@@ -874,12 +864,21 @@ const resolver: Resolver = async (
  */
 const DEFAULT_ENDPOINT_KEY = '';
 
+/**
+ * Default key to use when the @rest directive omits the "bodySerializers" parameter.
+ */
 const DEFAULT_SERIALIZER_KEY = '';
 
-const DEFAULT_JSON_SERIALIZER = (data: any) => ({
-  body: JSON.stringify(data),
-  headers: { 'Content-Type': 'application/json' },
-});
+const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
+  data: any,
+  headers: Headers,
+) => {
+  headers.set('Content-Type', 'application/json');
+  return {
+    body: JSON.stringify(data),
+    headers: headers,
+  };
+};
 
 /**
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
@@ -903,7 +902,7 @@ export class RestLink extends ApolloLink {
     typePatcher,
     customFetch,
     credentials,
-    additionalSerializers,
+    bodySerializers,
     defaultSerializer,
   }: RestLink.Options) {
     super();
@@ -969,6 +968,15 @@ export class RestLink extends ApolloLink {
       );
     }
 
+    if (
+      bodySerializers &&
+      bodySerializers.hasOwnProperty(DEFAULT_SERIALIZER_KEY)
+    ) {
+      console.warn(
+        'RestLink was configured to override the default serializer! This may result in unexpected behavior',
+      );
+    }
+
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.fieldNameDenormalizer = fieldNameDenormalizer || null;
     this.headers = normalizeHeaders(headers);
@@ -976,7 +984,7 @@ export class RestLink extends ApolloLink {
     this.customFetch = customFetch;
     this.serializers = {
       [DEFAULT_SERIALIZER_KEY]: defaultSerializer || DEFAULT_JSON_SERIALIZER,
-      ...(additionalSerializers || {}),
+      ...(bodySerializers || {}),
     };
   }
 
@@ -1034,7 +1042,6 @@ export class RestLink extends ApolloLink {
       fragmentDefinitions,
       typePatcher: this.typePatcher,
       serializers: this.serializers,
-      headersMergePolicy,
       responses: [],
     };
     const resolverOptions = {};
