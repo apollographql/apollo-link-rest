@@ -10,7 +10,7 @@ Calling REST APIs from a GraphQL client opens the benefits GraphQL for more peop
 * You have an existing codebase, but you're looking to evaluate whether GraphQL can work for your needs.
 * You have a large codebase, and the GraphQL migration is happening on the backend, but you want to use GraphQL *now* without waiting!
 
-With `apollo-link-rest`, you can now call your endpoints inside your GraphQL queries and have all your data managed by [`ApolloClient`](../../react/basics/setup.html#ApolloClient). `apollo-link-rest` is suitable for just dipping your toes in the water, or doing a full-steam ahead integration, and then later on migrating to a backend-driven GraphQL experience. `apollo-link-rest` combines well with other links such as [`apollo-link-context`](./context.html), [`apollo-link-state`](./state.html), and others! _For complex back-ends, you may want to consider consider using [`apollo-server`](/docs/apollo-server/) which you can try out at [launchpad.graphql.com](https://launchpad.graphql.com/)_
+With `apollo-link-rest`, you can now call your endpoints inside your GraphQL queries and have all your data managed by [`ApolloClient`](../../react/basics/setup.html#ApolloClient). `apollo-link-rest` is suitable for just dipping your toes in the water, or doing a full-steam ahead integration, and then later on migrating to a backend-driven GraphQL experience. `apollo-link-rest` combines well with other links such as [`apollo-link-context`](./context.html), [`apollo-link-state`](./state.html), and others! _For complex back-ends, you may want to consider using [`apollo-server`](/docs/apollo-server/) which you can try out at [launchpad.graphql.com](https://launchpad.graphql.com/)_
 
 You can start using ApolloClient in your app today, let's see how!
 
@@ -294,22 +294,35 @@ Here is one way you might customize `RestLink`:
 * `headers?: Headers`: Additional headers provided in this `context-link` [Values documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
 * `headersToOverride?: string[]` If you provide this array, we will merge the headers you provide in this link, by replacing any matching headers that exist in the root `RestLink` configuration. Alternatively you can use `headersMergePolicy` for more fine-grained customization of the merging behavior.
 * `headersMergePolicy?: RestLink.HeadersMergePolicy`: This is a function that decide how the headers returned in this `contextLink` are merged with headers defined at the `RestLink`-level. If you don't provide this, the headers will be simply appended. To use this option, you can provide your own function that decides how to process the headers. [Code references](https://github.com/apollographql/apollo-link-rest/blob/8e57cabb5344209d9cfa391c1614fe8880efa5d9/src/restLink.ts#L462-L510)
+* `restResponses?: Response[]`: This will be populated after the operation has completed with the [Responses](https://developer.mozilla.org/en-US/docs/Web/API/Response) of every REST url fetched during the operation. This can be useful if you need to access the response headers to grab an authorization token for example.
 
 <h3 id="context.headers">Example</h3>
-`RestLink` uses the `headers` field on the [`apollo-link-context`](./context.html) so you can compose other links that provide additional & dynamic headers to a given query. These headers will be merged with
 
-Here is one way to add `headers` to the context:
+`RestLink` uses the `headers` field on the [`apollo-link-context`](./context.html) so you can compose other links that provide additional & dynamic headers to a given query. 
+
+Here is one way to add request `headers` to the context and retrieve the response headers of the operation:
 
 ```js
-const authRestLink = setContext(async () => {
-  const token = await localStorage.getItem("token");
-  return {
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${token}`
-    }
-  };
-);
+const authRestLink = new ApolloLink((operation, forward) => {
+  operation.setContext(async ({headers}) => {
+    const token = await localStorage.getItem("token");
+    return {
+      headers: {
+        ...headers,
+        Accept: "application/json",
+        Authorization: token
+      }
+    };
+  });
+  return forward(operation).map(result => {
+    const { restResponses } = operation.getContext();
+    const authTokenResponse = restResponses.find(res => res.headers.has("Authorization"));
+    // You might also filter on res.url to find the response of a specific API call
+    return authTokenResponse 
+      ? localStorage.setItem("token", authTokenResponse.headers.get('Authorization')).then(() => result)
+      : result;
+  });
+});
 
 const restLink = new RestLink({ uri: "uri" });
 

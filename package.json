@@ -42,19 +42,18 @@
     "check-types":
       "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
   },
-  "dependencies": {
-    "apollo-link": "^1.0.7",
-    "graphql-anywhere": "^4.1.0-alpha.0"
-  },
   "peerDependencies": {
-    "graphql": "0.11.7 || ^0.12.3"
+    "apollo-link": ">=1",
+    "graphql": ">=0.11",
+    "graphql-anywhere": ">=4"
   },
   "devDependencies": {
-    "@types/graphql": "0.11.5",
+    "@types/graphql": "0.12.6",
     "@types/jest": "22.x",
-    "@types/node": "8.x",
-    "apollo-cache-inmemory": "1.1.x",
-    "apollo-client": "2.2.x",
+    "@types/node": "10.0.4",
+    "apollo-cache-inmemory": "1.2.1",
+    "apollo-client": "2.3.1",
+    "apollo-link": "1.2.2",
     "apollo-link-error": "1.0.x",
     "apollo-link-http": "1.5.x",
     "browserify": "14.5.0",
@@ -63,8 +62,9 @@
     "codecov": "3.0.0",
     "danger": "1.2.0",
     "fetch-mock": "^5.13.1",
-    "graphql": "0.11.7",
-    "graphql-tag": "2.5.0",
+    "graphql": "0.12.3",
+    "graphql-anywhere": "^4.1.0-alpha.0",
+    "graphql-tag": "2.9.2",
     "jest": "21.2.1",
     "jest-fetch-mock": "^1.4.0",
     "lerna": "2.4.0",
@@ -78,7 +78,7 @@
     "rollup-plugin-sourcemaps": "0.4.x",
     "snake-case": "2.1.x",
     "ts-jest": "22.4.x",
-    "typescript": "2.5.1",
+    "typescript": "2.8.3",
     "uglify-js": "3.1.5"
   },
   "jest": {

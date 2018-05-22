@@ -12,8 +12,10 @@ An Apollo Link to easily try out GraphQL without a full server. It can be used t
 ## Installation
 
 ```bash
-npm install apollo-link-rest --save # or `yarn add apollo-link-rest`
+npm install apollo-link-rest apollo-link graphql graphql-anywhere --save # or `yarn add apollo-link-rest apollo-link graphql graphql-anywhere`
 ```
+
+`apollo-link`, `graphql` and `graphql-anywhere` are peer dependencies needed by `apollo-link-rest`.
 
 ## Usage
 
@@ -82,6 +84,10 @@ REST Link uses the `headers` field on the context to allow passing headers to th
 
 - `headers`: an object representing values to be sent as headers on the request
 - `credentials`: a string representing the credentials policy you want for the fetch call
+
+## Documentation
+
+For a complete `apollo-link-rest` reference visit the documentation website at: https://www.apollographql.com/docs/link/links/rest.html
 
 ## Contributing
 

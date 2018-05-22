@@ -569,6 +569,9 @@ interface LinkChainContext {
 
   /** List of headers to override, passing this will swap headersMergePolicy if necessary */
   headersToOverride?: string[] | null;
+
+  /** An array of the responses from each fetched URL, useful for accessing headers in earlier links */
+  restResponses?: Response[];
 }
 
 /** Context passed via graphql() to our resolver */
@@ -590,6 +593,9 @@ interface RequestContext {
   mainDefinition: OperationDefinitionNode | FragmentDefinitionNode;
   fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
+
+  /** An array of the responses from each fetched URL */
+  responses: Response[];
 }
 
 const addTypeToNode = (node, typename) => {
@@ -698,7 +704,7 @@ const resolver: Resolver = async (
       method = 'GET';
     }
 
-    let body = null;
+    let body = undefined;
     if (
       -1 === ['GET', 'DELETE'].indexOf(method) &&
       operationType === 'mutation'
@@ -746,7 +752,10 @@ const resolver: Resolver = async (
         }
         return res;
       })
-      .then(res => res.json())
+      .then(res => {
+        context.responses.push(res);
+        return res.json();
+      })
       .then(
         result =>
           fieldNameNormalizer == null
@@ -869,7 +878,7 @@ export class RestLink extends ApolloLink {
     operation: Operation,
     forward?: NextLink,
   ): Observable<FetchResult> | null {
-    const { query, variables, getContext } = operation;
+    const { query, variables, getContext, setContext } = operation;
     const context: LinkChainContext | any = getContext() as any;
     const isRestQuery = hasDirectives(['rest'], operation.query);
     if (!isRestQuery) {
@@ -918,6 +927,7 @@ export class RestLink extends ApolloLink {
       mainDefinition,
       fragmentDefinitions,
       typePatcher: this.typePatcher,
+      responses: [],
     };
     const resolverOptions = {};
     return new Observable(observer => {
@@ -930,6 +940,11 @@ export class RestLink extends ApolloLink {
         resolverOptions,
       )
         .then(data => {
+          setContext({
+            restResponses: (context.restResponses || []).concat(
+              requestContext.responses,
+            ),
+          });
           observer.next({ data });
           observer.complete();
         })
