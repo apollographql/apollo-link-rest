@@ -93,7 +93,7 @@ export namespace RestLink {
 
     /**
      * A function that takes the response field name and converts it into a GraphQL compliant name
-     * 
+     *
      * @note This is called *before* @see typePatcher so that it happens after
      *       optional-field-null-insertion.
      */
@@ -113,7 +113,7 @@ export namespace RestLink {
      *
      * @note: This is called *after* @see fieldNameNormalizer because that happens
      *        after optional-nulls insertion, and those would clobber normalized names.
-     * 
+     *
      * @warning: We're not thrilled with this API, and would love a better alternative before we get to 1.0.0
      *           Please see proposals considered in https://github.com/apollographql/apollo-link-rest/issues/48
      *           And consider submitting alternate solutions to the problem!
@@ -400,7 +400,7 @@ const convertObjectKeys = (
   keypath: string[] = [],
 ): object => {
   let converter: RestLink.FieldNameNormalizer = null;
-  if (__converter.prototype.arity != 2) {
+  if (__converter.length != 2) {
     converter = (name, keypath) => {
       return __converter(name);
     };
@@ -740,13 +740,20 @@ const resolver: Resolver = async (
       headers,
       body: body && JSON.stringify(body),
     })
-      .then(res => {
+      .then(async res => {
         if (res.status >= 300) {
           // Throw a JSError, that will be available under the
           // "Network error" category in apollo-link-error
+          let parsed: any;
+          try {
+            parsed = await res.json();
+          } catch (error) {
+            // its not json
+            parsed = await res.text();
+          }
           rethrowServerSideError(
             res,
-            res.text(),
+            parsed,
             `Response not successful: Received status code ${res.status}`,
           );
         }
