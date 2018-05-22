@@ -1134,6 +1134,61 @@ describe('Query options', () => {
       const credentials = fetchMock.lastCall()[1].credentials;
       expect(credentials).toBe('my-credentials');
     });
+
+    it('sets the fetch responses on context.restResponses', async () => {
+      expect.assertions(5);
+
+      const credentialsMiddleware = new ApolloLink((operation, forward) => {
+        return forward(operation).map(result => {
+          const { restResponses } = operation.getContext();
+          expect(restResponses).toHaveLength(2);
+          expect(restResponses[0].url).toBe('/api/post/1');
+          expect(restResponses[0].headers.get('Header1')).toBe('Header1');
+          expect(restResponses[1].url).toBe('/api/tags');
+          expect(restResponses[1].headers.get('Header2')).toBe('Header2');
+          return result;
+        });
+      });
+
+      const link = ApolloLink.from([
+        credentialsMiddleware,
+        new RestLink({ uri: '/api' }),
+      ]);
+
+      const context: { restResponses?: Response[] } = {};
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', {
+        body: post,
+        headers: { Header1: 'Header1' },
+      });
+
+      const tags = [{ name: 'apollo' }, { name: 'graphql' }];
+      fetchMock.get('/api/tags', {
+        body: tags,
+        headers: { Header2: 'Header2' },
+      });
+
+      const postAndTags = gql`
+        query postAndTags {
+          post @rest(type: "Post", path: "/post/1") {
+            id
+            title
+            tags @rest(type: "[Tag]", path: "/tags") {
+              name
+            }
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postAndTags',
+          query: postAndTags,
+          context,
+        }),
+      );
+    });
   });
   describe('method', () => {
     it('works for GET requests', async () => {
