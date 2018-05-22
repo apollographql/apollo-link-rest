@@ -4,6 +4,13 @@
 
 ### v0.next
 
+- Feature: Expose Headers from REST responses to the apollo-link chain via context. [#106](https://github.com/apollographql/apollo-link-rest/issues/106)
+- Feature: Expose HTTP-error REST responses as JSON if available! [#94](https://github.com/apollographql/apollo-link-rest/issues/94)
+- Feature: Add `@type(name: )` as an alternative, lighter-weight system for tagging Nested objects with __typenames! [#72](https://github.com/apollographql/apollo-link-rest/issues/72)
+- Fix: Bundle-size / Tree Shaking issues [#99](https://github.com/apollographql/apollo-link-rest/issues/99)
+- Fix: Dependency tweaks to prevent multiple versions of deps [#105](https://github.com/apollographql/apollo-link-rest/issues/105)
+
+
 ### v0.2.4
 
 - Enable JSDoc comments for TypeScript!

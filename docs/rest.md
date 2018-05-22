@@ -147,7 +147,9 @@ query MyQuery {
 }
 ```
 
-The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. To do so, you can define a `typePatcher`:
+The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. 
+
+One way you can do this is by providing a `typePatcher`:
 
 ```typescript
 const restLink = new RestLink({
@@ -167,6 +169,84 @@ const restLink = new RestLink({
   },
 })
 ```
+
+If you have a very lightweight REST integration, you can use the `@type(name: ...)` directive.
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "Planet") {
+      name
+    }
+  }
+}
+```
+
+This is appropriate if you have a small list of apollo-link-rest with nested objects. The cost of this strategy is every query that deals with these objects needs to also include `@type(name: ...)` and this could be verbose and error prone.
+
+You can also use both of these approaches in tandem: 
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "Results"){
+      name
+    }
+    typePatchedResults {
+      name
+    }
+  }
+}
+```
+
+```typescript
+const restLink = new RestLink({
+  uri: '/api',
+  typePatcher: {
+    PlanetPayload: (
+      data: any,
+      outerType: string,
+      patchDeeper: RestLink.FunctionalTypePatcher,
+    ): any => {
+      if (data.typePatchedResults != null) {
+        data.typePatchedResults = data.typePatchedResults.map( planet => { __typename: "Planet", ...planet });
+      }
+      return data;
+    },
+    /* … other nested type patchers … */
+  },
+})
+```
+
+<h4 id="options.typePatcher.caveat">Warning</h4>
+
+However, you should know that at the moment the `typePatcher` is not able to act on nested objects within annotated `@type` objects. For instance, `failingResults` will not be patched if you define it on the `typePatcher`.
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "Planet"){
+      name
+      failingResults {
+        name
+      }
+    }
+    typePatchedResults {
+      name
+    }
+  }
+}
+```
+
+To make this work you should try to pick one strategy, and stick with it -- either all `typePatcher` or all `@type` directives.
+
+This is tracked in [Issue #112](https://github.com/apollographql/apollo-link-rest/issues/112)
 
 <h3 id=options.example>Complete options</h3>
 

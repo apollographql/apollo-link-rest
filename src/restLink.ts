@@ -400,7 +400,7 @@ const convertObjectKeys = (
   keypath: string[] = [],
 ): object => {
   let converter: RestLink.FieldNameNormalizer = null;
-  if (__converter.prototype.arity != 2) {
+  if (__converter.length != 2) {
     converter = (name, keypath) => {
       return __converter(name);
     };
@@ -598,6 +598,21 @@ interface RequestContext {
   responses: Response[];
 }
 
+const addTypeToNode = (node, typename) => {
+  if (node === null || node === undefined || typeof node !== 'object') {
+    return node;
+  }
+
+  if (!Array.isArray(node)) {
+    node['__typename'] = typename;
+    return node;
+  }
+
+  return node.map(item => {
+    return addTypeToNode(item, typename);
+  });
+};
+
 const resolver: Resolver = async (
   fieldName: string,
   root: any,
@@ -608,10 +623,17 @@ const resolver: Resolver = async (
   const { directives, isLeaf, resultKey } = info;
   const { exportVariables } = context;
 
-  const currentNode = (root || {})[resultKey];
+  let currentNode = (root || {})[resultKey];
   if (root && directives && directives.export) {
     exportVariables[directives.export.as] = currentNode;
   }
+
+  const isATypeCall = directives && directives.type;
+
+  if (!isLeaf && isATypeCall) {
+    currentNode = addTypeToNode(currentNode, directives.type.name);
+  }
+
   const isNotARestCall = !directives || !directives.rest;
   if (isLeaf || isNotARestCall) {
     return currentNode;
@@ -718,13 +740,20 @@ const resolver: Resolver = async (
       headers,
       body: body && JSON.stringify(body),
     })
-      .then(res => {
+      .then(async res => {
         if (res.status >= 300) {
           // Throw a JSError, that will be available under the
           // "Network error" category in apollo-link-error
+          let parsed: any;
+          try {
+            parsed = await res.json();
+          } catch (error) {
+            // its not json
+            parsed = await res.text();
+          }
           rethrowServerSideError(
             res,
-            res.text(),
+            parsed,
             `Response not successful: Received status code ${res.status}`,
           );
         }
