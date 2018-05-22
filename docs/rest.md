@@ -147,21 +147,9 @@ query MyQuery {
 }
 ```
 
-The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. To do so, you can use the `@type(name: ...)` directive.
+The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. 
 
-```graphql
-query MyQuery {
-  planets @rest(type: "PlanetPayload", path: "planets/") {
-    count
-    next
-    results @type(name: "ResultS"){
-      name
-    }
-  }
-}
-```
-
-Or you can define a `typePatcher`:
+One way you can do this is by providing a `typePatcher`:
 
 ```typescript
 const restLink = new RestLink({
@@ -181,6 +169,22 @@ const restLink = new RestLink({
   },
 })
 ```
+
+If you have a very lightweight REST integration, you can use the `@type(name: ...)` directive.
+
+```graphql
+query MyQuery {
+  planets @rest(type: "PlanetPayload", path: "planets/") {
+    count
+    next
+    results @type(name: "Planet") {
+      name
+    }
+  }
+}
+```
+
+This is appropriate if you have a small list of apollo-link-rest with nested objects. The cost of this strategy is every query that deals with these objects needs to also include `@type(name: ...)` and this could be verbose and error prone.
 
 You can also use both of these approaches in tandem: 
 
@@ -218,14 +222,16 @@ const restLink = new RestLink({
 })
 ```
 
-However, you should know that at the moment the `typepatcher` is not able to act on nested objectes within annotated `@type` objects. For instance, `failingResults` will not be patched if you define it on the `typepatcher`.
+<h4 id="options.typePatcher.caveat">Warning</h4>
+
+However, you should know that at the moment the `typePatcher` is not able to act on nested objects within annotated `@type` objects. For instance, `failingResults` will not be patched if you define it on the `typePatcher`.
 
 ```graphql
 query MyQuery {
   planets @rest(type: "PlanetPayload", path: "planets/") {
     count
     next
-    results @type(name: "ResultS"){
+    results @type(name: "Planet"){
       name
       failingResults {
         name
@@ -238,26 +244,9 @@ query MyQuery {
 }
 ```
 
-To make this work you should keep using the `@type` directive.
+To make this work you should try to pick one strategy, and stick with it -- either all `typePatcher` or all `@type` directives.
 
-
-```graphql
-query MyQuery {
-  planets @rest(type: "PlanetPayload", path: "planets/") {
-    count
-    next
-    results @type(name: "Results") {
-      name
-      nowWorkingResults @type(name: "NowWorkingResults") {
-        name
-      }
-    }
-    typePatchedResults {
-      name
-    }
-  }
-}
-```
+This is tracked in [Issue #112](https://github.com/apollographql/apollo-link-rest/issues/112)
 
 <h3 id=options.example>Complete options</h3>
 

@@ -4,6 +4,8 @@
 
 ### v0.next
 
+- Add `@type(name: )` as an alternative, lighter-weight system for tagging Nested objects with __typenames! 
+
 ### v0.2.4
 
 - Enable JSDoc comments for TypeScript!
