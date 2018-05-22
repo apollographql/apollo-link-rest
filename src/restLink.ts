@@ -761,9 +761,12 @@ const resolver: Resolver = async (
       })
       .then(res => {
         context.responses.push(res);
+        // HTTP-204 means "no-content", similarly Content-Length implies the same
+        // This commonly occurs when you POST/PUT to the server, and it acknowledges
+        // success, but doesn't return your Resource.
         return res.status === 204 || res.headers.get('Content-Length') === '0'
-          ? {}
-          : res.json()
+          ? Promise.resolve({})
+          : res.json();
       })
       .then(
         result =>
