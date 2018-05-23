@@ -90,8 +90,9 @@ Construction of `RestLink` takes an options object to customize the behavior of 
 * `fieldNameNormalizer?: /function/`: _optional_ function that takes the response field name and converts it into a GraphQL compliant name. -- This is useful if your `REST` API returns fields that aren't representable as GraphQL, or if you want to convert between `snake_case` field names in JSON to `camelCase` keyed fields.
 * `fieldNameDenormalizer?: /function/`: _optional_ function that takes a GraphQL-compliant field name and converts it back into an endpoint-specific name.
 * `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
+* `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. The function will also be passed the current `Header` set, which can be updated before the request is sent to `fetch`. Default method uses `JSON.stringify` and sets the `Content-Type` to `application/json`.
 * `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
-* `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. Default is JSON.
+
 
 
 <h3 id="options.endpoints">Multiple endpoints</h3>
@@ -275,12 +276,13 @@ Here is one way you might customize `RestLink`:
         bodySnippet...
       }
     },
-    bodySerializer: (body: any) => {
+    defaultSerializer: (data: any, headers: Headers) => {
       const formData = new FormData();
       for (let key in body) {
         formData.append(key, body[key]);
       }
-      return formData;
+      headers.set("Content-Type", "x-www-form-encoded")
+      return {body: formData, headers};
     }
   });
 ```
@@ -366,7 +368,7 @@ An `@rest(…)` directive takes two required and several optional arguments:
 * _optional_ `endpoint?: string` key to use when looking up the endpoint in the (optional) `endpoints` table if provided to RestLink at creation time.
 * _optional_ `bodyKey?: string = "input"`: This is the name of the `variable` to use when looking to build a REST request-body for a `PUT` or `POST` request. It defaults to `input` if not supplied.
 * _optional_ `bodyBuilder?: /function/`: If provided, this is the name a `function` that you provided to `variables`, that is called when a request-body needs to be built. This lets you combine arguments or encode the body in some format other than JSON.
-* _optional_ `bodySerializer?: /function/`: function that takes the body of the request directly before it is passed to the fetch call. Defaults to `JSON.stringify`.
+* _optional_ `bodySerializer?: /string | function/`: string key to look up a function in `bodySerializers` or a custom serialization function for the body/headers of this request before it is passed ot the fetch call. Defaults to `JSON.stringify` and setting `Content-Type: application-json`.
 
 <h3 id="rest.arguments.variables">Variables</h3>
 
@@ -443,14 +445,14 @@ If you need to serialize your data differently (say as form-encoded), you can pr
 ```graphql
 mutation encryptedForm(
   $input: PublishablePostInput!,
-  formSerializer: any
+  $formSerializer: any
 ) {
   publishedPost: publish(input: $input)
     @rest(
       type: "Post",
       path: "/posts/new",
       method: "POST",
-      bodySerializer: formSerializer
+      bodySerializer: $formSerializer
     ) {
       id
       title
