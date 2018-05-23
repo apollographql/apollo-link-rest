@@ -1210,19 +1210,20 @@ describe('Query single call', () => {
     `;
 
     function createPostsPath(variables) {
-      const qs = Object.keys(
-        variables,
-      ).reduce((acc: string, key: string): string => {
-        if (variables[key] === null || variables[key] === undefined) {
-          return acc;
-        }
-        if (acc === '') {
-          return '?' + key + '=' + encodeURIComponent(String(variables[key]));
-        }
-        return (
-          acc + '&' + key + '=' + encodeURIComponent(String(variables[key]))
-        );
-      }, '');
+      const qs = Object.keys(variables).reduce(
+        (acc: string, key: string): string => {
+          if (variables[key] === null || variables[key] === undefined) {
+            return acc;
+          }
+          if (acc === '') {
+            return '?' + key + '=' + encodeURIComponent(String(variables[key]));
+          }
+          return (
+            acc + '&' + key + '=' + encodeURIComponent(String(variables[key]))
+          );
+        },
+        '',
+      );
       return '/posts' + qs;
     }
 
@@ -1316,8 +1317,14 @@ describe('Query multiple calls', () => {
     expect(data.post).toBeDefined();
     expect(data.post.tags).toBeDefined();
   });
+});
 
-  +it('GraphQL aliases should work', async () => {
+describe('GraphQL aliases should work', async () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+
+  it('outer-level aliases are supported', async () => {
     expect.assertions(2);
 
     const link = new RestLink({ endpoints: { v1: '/v1', v2: '/v2' } });
@@ -1352,6 +1359,34 @@ describe('Query multiple calls', () => {
 
     expect(data.v1.title).toBe(postV1.title);
     expect(data.v2.titleText).toBe(postV2.titleText);
+  });
+
+  it('nested aliases are supported', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/v1' });
+
+    const postV1 = { id: '1', titleText: '1. Love apollo' };
+    fetchMock.get('/v1/post/1', postV1);
+
+    const postTitleQueries = gql`
+      query postTitle($id: ID!) {
+        post(id: $id) @rest(type: "Post", path: "/post/:id") {
+          id
+          title: titleText
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTitleQueries,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data.post.title).toBe(postV1.titleText);
   });
 });
 

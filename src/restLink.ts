@@ -623,7 +623,8 @@ const resolver: Resolver = async (
   const { directives, isLeaf, resultKey } = info;
   const { exportVariables } = context;
 
-  let currentNode = (root || {})[resultKey];
+  // Support GraphQL Aliases! Use fieldName not resultKey to lookup our value
+  let currentNode = (root || {})[fieldName];
   if (root && directives && directives.export) {
     exportVariables[directives.export.as] = currentNode;
   }
