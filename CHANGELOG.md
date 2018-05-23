@@ -10,6 +10,7 @@
 - Feature: Support "No-Content" responses! [#107](https://github.com/apollographql/apollo-link-rest/pull/107) [#111](https://github.com/apollographql/apollo-link-rest/pull/111)
 - Fix: Bundle-size / Tree Shaking issues [#99](https://github.com/apollographql/apollo-link-rest/issues/99)
 - Fix: Dependency tweaks to prevent multiple versions of deps [#105](https://github.com/apollographql/apollo-link-rest/issues/105)
+- Fix: GraphQL Nested Aliases - [#113](https://github.com/apollographql/apollo-link-rest/pull/113) [#7](https://github.com/apollographql/apollo-link-rest/issues/7)
 
 
 ### v0.2.4
