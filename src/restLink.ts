@@ -623,21 +623,35 @@ const resolver: Resolver = async (
   const { directives, isLeaf, resultKey } = info;
   const { exportVariables } = context;
 
-  // Support GraphQL Aliases! Use fieldName not resultKey to lookup our value
-  let currentNode = (root || {})[fieldName];
+  // Support GraphQL Aliases!
+  const aliasedNode = (root || {})[resultKey];
+  const preAliasingNode = (root || {})[fieldName];
+
   if (root && directives && directives.export) {
-    exportVariables[directives.export.as] = currentNode;
+    // @export(as:) is only supported with apollo-link-rest at this time
+    // so use the preAliasingNode as we're responsible for implementing aliasing!
+    exportVariables[directives.export.as] = preAliasingNode;
   }
 
   const isATypeCall = directives && directives.type;
 
   if (!isLeaf && isATypeCall) {
-    currentNode = addTypeToNode(currentNode, directives.type.name);
+    // @type(name: ) is only supported inside apollo-link-rest at this time
+    // so use the preAliasingNode as we're responsible for implementing aliasing!
+    // Also: exit early, since @type(name: ) && @rest() can't both exist on the same node.
+    if (directives.rest) {
+      throw new Error(
+        'Invalid use of @type(name: ...) directive on a call that also has @rest(...)',
+      );
+    }
+    return addTypeToNode(preAliasingNode, directives.type.name);
   }
 
   const isNotARestCall = !directives || !directives.rest;
   if (isLeaf || isNotARestCall) {
-    return currentNode;
+    // This is a leaf API call, it's not tagged with @rest()
+    // This might not belong to us so return the aliasNode version preferentially
+    return aliasedNode || preAliasingNode;
   }
   const {
     credentials,
