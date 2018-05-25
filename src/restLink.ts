@@ -25,8 +25,9 @@ import {
   isInlineFragment,
   resultKeyNameFromField,
 } from 'apollo-utilities';
-import { graphql, ExecInfo } from 'graphql-anywhere/lib/async';
-import { Resolver } from 'graphql-anywhere';
+
+import { graphql } from 'graphql-anywhere/lib/async';
+import { Resolver, ExecInfo } from 'graphql-anywhere';
 
 export namespace RestLink {
   export type URI = string;
