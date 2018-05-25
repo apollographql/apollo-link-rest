@@ -4,10 +4,13 @@
 
 ### v0.next
 
+### v0.3.0
+
 - Feature: Expose Headers from REST responses to the apollo-link chain via context. [#106](https://github.com/apollographql/apollo-link-rest/issues/106)
 - Feature: Expose HTTP-error REST responses as JSON if available! [#94](https://github.com/apollographql/apollo-link-rest/issues/94)
 - Feature: Add `@type(name: )` as an alternative, lighter-weight system for tagging Nested objects with __typenames! [#72](https://github.com/apollographql/apollo-link-rest/issues/72)
 - Feature: Support "No-Content" responses! [#107](https://github.com/apollographql/apollo-link-rest/pull/107) [#111](https://github.com/apollographql/apollo-link-rest/pull/111)
+- Feature: Support serializing the body of REST calls with formats other than JSON [#103](https://github.com/apollographql/apollo-link-rest/pull/103)
 - Fix: Bundle-size / Tree Shaking issues [#99](https://github.com/apollographql/apollo-link-rest/issues/99)
 - Fix: Dependency tweaks to prevent multiple versions of deps [#105](https://github.com/apollographql/apollo-link-rest/issues/105)
 - Fix: GraphQL Nested Aliases - [#113](https://github.com/apollographql/apollo-link-rest/pull/113) [#7](https://github.com/apollographql/apollo-link-rest/issues/7)
