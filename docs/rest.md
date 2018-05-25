@@ -488,12 +488,14 @@ const formSerializer = (data: any, headers: Headers) => {
 
 And `"xml"` would have been defined on the `RestLink` directly
 
+```typescript
 const restLink = new RestLink({
  ...otherOptions,
  bodySerializers: {
    xml: xmlSerializer
  }
 })
+```
 
 
 <h2 id="export">@export directive</h2>

@@ -784,7 +784,7 @@ const resolver: Resolver = async (
           noOpNameNormalizer,
       );
 
-      let serializedBody;
+      let serializedBody: RestLink.SerializedBody;
 
       if (typeof bodySerializer === 'string') {
         if (!serializers.hasOwnProperty(bodySerializer)) {
