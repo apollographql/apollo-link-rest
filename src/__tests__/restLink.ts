@@ -1216,15 +1216,22 @@ describe('Query single call', () => {
   });
 
   it('can build the path using pathBuilder', async () => {
-    expect.assertions(1);
+    expect.assertions(4);
 
     const link = new RestLink({ uri: '/api' });
-    const posts = [{ id: '1', title: 'Love apollo' }];
-    fetchMock.get('/api/posts?status=published', posts);
+    const posts1 = [{ id: '1', title: 'Love apollo' }];
+    const posts2 = [{ id: '2', title: 'Love apollo' }];
+    fetchMock.get('/api/posts?status=published', posts1);
+    fetchMock.get('/api/posts?otherStatus=published', posts2);
 
     const postTitleQuery = gql`
-      query postTitle($pathFunction: any, $status: String) {
-        posts(status: $status) @rest(type: "Post", pathBuilder: $pathFunction) {
+      query postTitle(
+        $pathFunction: any
+        $status: String
+        $otherStatus: String
+      ) {
+        posts(status: $status, otherStatus: $otherStatus)
+          @rest(type: "Post", pathBuilder: $pathFunction) {
           id
           title
         }
@@ -1246,10 +1253,12 @@ describe('Query single call', () => {
         },
         '',
       );
+
+      // console.debug(variables, qs);
       return '/posts' + qs;
     }
 
-    const { data } = await makePromise<Result>(
+    const { data: data1 } = await makePromise<Result>(
       execute(link, {
         operationName: 'postTitle',
         query: postTitleQuery,
@@ -1260,8 +1269,51 @@ describe('Query single call', () => {
       }),
     );
 
-    expect(data).toMatchObject({
-      posts: [{ ...posts[0], __typename: 'Post' }],
+    expect(data1).toMatchObject({
+      posts: [{ ...posts1[0], __typename: 'Post' }],
+    });
+
+    // Extra tests below to disprove: https://github.com/apollographql/apollo-link-rest/issues/102
+    const { data: data2 } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postTitle',
+        query: postTitleQuery,
+        variables: {
+          otherStatus: 'published',
+          pathFunction: createPostsPath,
+        },
+      }),
+    );
+
+    expect(data2).toMatchObject({
+      posts: [{ ...posts2[0], __typename: 'Post' }],
+    });
+
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link,
+    });
+
+    const { data: data1b }: { data: any } = await client.query({
+      query: postTitleQuery,
+      variables: {
+        status: 'published',
+        pathFunction: createPostsPath,
+      },
+    });
+    expect(data1b).toMatchObject({
+      posts: [{ ...posts1[0], __typename: 'Post' }],
+    });
+
+    const { data: data2b }: { data: any } = await client.query({
+      query: postTitleQuery,
+      variables: {
+        otherStatus: 'published',
+        pathFunction: createPostsPath,
+      },
+    });
+    expect(data2b).toMatchObject({
+      posts: [{ ...posts2[0], __typename: 'Post' }],
     });
   });
 });
