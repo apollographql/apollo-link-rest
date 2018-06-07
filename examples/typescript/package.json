@@ -2,17 +2,18 @@
   "name": "typescript",
   "version": "0.1.0",
   "private": true,
+  "main": "src/index.tsx",
   "dependencies": {
-    "@types/graphql": "0.11.5",
-    "apollo-cache-inmemory": "^1.1.4",
-    "apollo-client": "^2.0.4",
-    "apollo-link-rest": "^0.0.1-alpha.0",
-    "graphql": "0.11.7",
-    "graphql-tag": "^2.6.1",
+    "@types/graphql": "0.13.1",
+    "apollo-cache-inmemory": "^1.2.1",
+    "apollo-client": "^2.3.1",
+    "apollo-link-rest": "0.3.0",
+    "graphql": "0.13.2",
+    "graphql-tag": "^2.9.2",
     "react": "^16.2.0",
-    "react-apollo": "^2.0.4",
-    "react-dom": "^16.2.0",
-    "react-scripts-ts": "2.8.0"
+    "react-apollo": "^2.1.4",
+    "react-dom": "^16.4.0",
+    "react-scripts-ts": "^2.13.0"
   },
   "scripts": {
     "start": "react-scripts-ts start",
