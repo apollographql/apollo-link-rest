@@ -816,11 +816,12 @@ const resolver: Resolver = async (
           // Throw a JSError, that will be available under the
           // "Network error" category in apollo-link-error
           let parsed: any;
+          // responses need to be cloned as they can only be read once
           try {
-            parsed = await res.json();
+            parsed = await res.clone().json();
           } catch (error) {
             // its not json
-            parsed = await res.text();
+            parsed = await res.clone().text();
           }
           rethrowServerSideError(
             res,
