@@ -4,6 +4,11 @@
 
 ### v0.next
 
+### v0.3.1
+
+* Fix: Fetch Response bodies can only be "read" once after which they throw "Already Read" -- this prevented us from properly speculatively parsing the error bodies outside of a test environment. [#122](https://github.com/apollographql/apollo-link-rest/issues/122)
+* Fix: Some browsers explode when you send null to them! [#121](https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677)
+
 ### v0.3.0
 
 * Feature: Expose Headers from REST responses to the apollo-link chain via context. [#106](https://github.com/apollographql/apollo-link-rest/issues/106)
