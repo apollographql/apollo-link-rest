@@ -806,10 +806,13 @@ const resolver: Resolver = async (
 
     validateRequestMethodForOperationType(method, operationType || 'query');
     return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
-      credentials,
       method,
       headers: overrideHeaders || headers,
       body: body,
+
+      // Only set credentials if they're non-null as some browsers throw an exception:
+      // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
+      ...(credentials ? { credentials } : {}),
     })
       .then(async res => {
         if (res.status >= 300) {
