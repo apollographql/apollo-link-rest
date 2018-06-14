@@ -16,8 +16,7 @@
   },
   "homepage": "https://github.com/apollographql/apollo-link-rest#readme",
   "scripts": {
-    "build:browser":
-      "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i apollo-link --i graphql --i apollo-utilities && npm run minify:browser",
+    "build:browser": "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i apollo-link --i graphql --i apollo-utilities && npm run minify:browser",
     "build": "tsc -p .",
     "bundle": "rollup -c",
     "clean": "rimraf lib/* && rimraf coverage/*",
@@ -28,19 +27,16 @@
     "docs:pull": "./scripts/docs_pull.sh",
     "docs:push": "./scripts/docs_push.sh",
     "filesize": "npm run build && npm run build:browser && bundlesize",
-    "lint":
-      "prettier --trailing-comma all --single-quote --write \"src/**/*.{j,t}s*\"",
+    "lint": "prettier --trailing-comma all --single-quote --write \"src/**/*.{j,t}s*\"",
     "lint-staged": "lint-staged",
-    "minify:browser":
-      "uglifyjs -c -m -o ./lib/bundle.min.js -- ./lib/bundle.js",
+    "minify:browser": "uglifyjs -c -m -o ./lib/bundle.min.js -- ./lib/bundle.js",
     "postbuild": "npm run bundle",
     "prebuild": "npm run clean",
     "prepublishOnly": "npm run clean && npm run build",
     "test": "jest",
     "coverage": "npm run lint && jest --coverage",
     "watch": "tsc -w -p .",
-    "check-types":
-      "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
+    "check-types": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json"
   },
   "peerDependencies": {
     "apollo-link": ">=1",
@@ -49,12 +45,12 @@
   },
   "devDependencies": {
     "@types/graphql": "0.13.x",
-    "@types/jest": "22.x",
-    "@types/node": "10.1.x",
-    "apollo-cache-inmemory": "1.2.1",
-    "apollo-client": "2.3.1",
-    "apollo-link": "1.2.2",
-    "apollo-link-error": "1.0.x",
+    "@types/jest": "23.x",
+    "@types/node": "10.3.x",
+    "apollo-cache-inmemory": "1.2.x",
+    "apollo-client": "2.3.x",
+    "apollo-link": "1.2.x",
+    "apollo-link-error": "1.1.x",
     "apollo-link-http": "1.5.x",
     "browserify": "16.2.x",
     "bundlesize": "0.17.x",
@@ -65,21 +61,21 @@
     "graphql": "0.13.x",
     "graphql-anywhere": "4.1.x",
     "graphql-tag": "2.9.x",
-    "jest": "22.x",
+    "jest": "23.x",
     "jest-fetch-mock": "1.6.x",
     "lerna": "2.11.x",
-    "lint-staged": "7.1.x",
+    "lint-staged": "7.2.x",
     "lodash": "4.17.x",
     "pre-commit": "1.2.x",
-    "prettier": "1.12.x",
+    "prettier": "1.13.x",
     "rimraf": "2.6.x",
     "rollup": "0.59.x",
     "rollup-plugin-local-resolve": "1.0.x",
     "rollup-plugin-sourcemaps": "0.4.x",
     "snake-case": "2.1.x",
     "ts-jest": "22.4.x",
-    "typescript": "2.8.x",
-    "uglify-js": "3.3.x"
+    "typescript": "2.9.x",
+    "uglify-js": "3.4.x"
   },
   "jest": {
     "globals": {
@@ -92,8 +88,15 @@
       ".(ts|tsx)": "<rootDir>/node_modules/ts-jest/preprocessor.js"
     },
     "testRegex": "(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$",
-    "moduleFileExtensions": ["ts", "tsx", "js", "json"],
-    "setupFiles": ["./scripts/jest.js"]
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js",
+      "json"
+    ],
+    "setupFiles": [
+      "./scripts/jest.js"
+    ]
   },
   "bundlesize": [
     {
@@ -111,7 +114,10 @@
       "prettier --trailing-comma all --single-quote --write",
       "git add"
     ],
-    "*.json*": ["prettier --write", "git add"]
+    "*.json*": [
+      "prettier --write",
+      "git add"
+    ]
   },
   "pre-commit": "lint-staged"
 }
