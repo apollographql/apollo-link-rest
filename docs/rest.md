@@ -188,16 +188,16 @@ query MyQuery {
 }
 ```
 
-This is appropriate if you have a small list of apollo-link-rest with nested objects. The cost of this strategy is every query that deals with these objects needs to also include `@type(name: ...)` and this could be verbose and error prone.
+This is appropriate if you have a small list of nested objects. The cost of this strategy is every query that deals with these objects needs to also include `@type(name: ...)` and this could be verbose and error prone.
 
-You can also use both of these approaches in tandem: 
+You can also use both of these approaches in tandem:
 
 ```graphql
 query MyQuery {
   planets @rest(type: "PlanetPayload", path: "planets/") {
     count
     next
-    results @type(name: "Results"){
+    results @type(name: "Results") {
       name
     }
     typePatchedResults {
@@ -235,7 +235,7 @@ query MyQuery {
   planets @rest(type: "PlanetPayload", path: "planets/") {
     count
     next
-    results @type(name: "Planet"){
+    results @type(name: "Planet") {
       name
       failingResults {
         name
