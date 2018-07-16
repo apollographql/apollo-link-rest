@@ -83,7 +83,7 @@ export namespace RestLink {
    */
   export type ServerError = Error & {
     response: Response;
-    result: Promise<string>;
+    result: any;
     statusCode: number;
   };
 
@@ -577,7 +577,7 @@ export const validateRequestMethodForOperationType = (
  */
 const rethrowServerSideError = (
   response: Response,
-  result: Promise<string>,
+  result: any,
   message: string,
 ) => {
   const error = new Error(message) as RestLink.ServerError;
