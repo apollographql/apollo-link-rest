@@ -4,6 +4,15 @@
 
 ### v0.next
 
+### v0.4.0
+
+Breaking changes around `path`-variable replacement and `pathBuilder` (previously undocumented, [#132](https://github.com/apollographql/apollo-link-rest/issues/132)).
+
+* Breaking Change: paths now have a new style for variable replacement. (Old style is marked as deprecated, but will still work until v0.5.0). The migration should be easy in most cases /path/:foo => /path/{args.foo}
+* Breaking Change: pathBuilder signature changes to give them access to context & other data [#131](https://github.com/apollographql/apollo-link-rest/issues/131) and support optional Values [#130](https://github.com/apollographql/apollo-link-rest/issues/130)
+* Breaking Change: BodyBuilder signature changes to give them access to context & other data (for consistency with pathBuilder)
+* Fix/Feature: Queries that fetch Scalar values or Arrays of scalar values should now work! [#129](https://github.com/apollographql/apollo-link-rest/issues/129)
+
 ### v0.3.1
 
 * Fix: Fetch Response bodies can only be "read" once after which they throw "Already Read" -- this prevented us from properly speculatively parsing the error bodies outside of a test environment. [#122](https://github.com/apollographql/apollo-link-rest/issues/122)

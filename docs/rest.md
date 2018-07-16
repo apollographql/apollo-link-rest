@@ -363,9 +363,10 @@ The rest directive could be used at any depth in a query, but once it is used, n
 An `@rest(…)` directive takes two required and several optional arguments:
 
 * `type: string`: The GraphQL type this will return
-* `path: string`: uri-path to the REST API. This could be a path or a full url. If a path, the endpoint given on link creation or from the context is concatenated with it to produce a full `URI`.
+* `path: string`: uri-path to the REST API. This could be a path or a full url. If a path, the endpoint given on link creation or from the context is concatenated with it to produce a full `URI`. See also: `pathBuilder
 * _optional_ `method?: "GET" | "PUT" | "POST" | "DELETE"`: the HTTP method to send the request via (i.e GET, PUT, POST)
 * _optional_ `endpoint?: string` key to use when looking up the endpoint in the (optional) `endpoints` table if provided to RestLink at creation time.
+* _optional_ `pathBuilder?: /function/`: If provided, this function gets to control what path is produced for this request.
 * _optional_ `bodyKey?: string = "input"`: This is the name of the `variable` to use when looking to build a REST request-body for a `PUT` or `POST` request. It defaults to `input` if not supplied.
 * _optional_ `bodyBuilder?: /function/`: If provided, this is the name a `function` that you provided to `variables`, that is called when a request-body needs to be built. This lets you combine arguments or encode the body in some format other than JSON.
 * _optional_ `bodySerializer?: /string | function/`: string key to look up a function in `bodySerializers` or a custom serialization function for the body/headers of this request before it is passed ot the fetch call. Defaults to `JSON.stringify` and setting `Content-Type: application-json`.
@@ -376,12 +377,43 @@ You can use query `variables` inside nested queries, or in the the path argument
 
 ```graphql
 query postTitle {
-  post(id: "1") @rest(type: "Post", path: "/post/:id") {
+  post(id: "1") @rest(type: "Post", path: "/post/{args.id}") {
     id
     title
   }
 }
 ```
+
+*Warning*: Variables in the main path will not automatically have `encodeURIComponent` called on them 
+
+Additionally, you can also control the query-string: 
+
+```graphql
+query postTitle {
+  postSearch(query: "some key words", page_size: 5)
+    @rest(type: "Post", path: "/search?{args}&{context.language}") {
+    id
+    title
+  }
+}
+```
+
+Things to note:
+
+1. This will be converted into `/search?query=some%20key%20words&page_size=5&lang=en` 
+2. The `context.language / lang=en` is extracting an object from the Apollo Context, that was added via an `apollo-link-context` Link.
+3. The query string arguments are assembled by npm:qs and have `encodeURIComponent` called on them.
+
+The available variable sources are:
+
+* `args` these are the things passed directly to this field parameters. In the above example `postSearch` had `query` and `page_size` in args.
+* `exportVariables` these are the things in the parent context that were tagged as `@export(as: ...)`
+* `context` these are the apollo-context, so you can have globals set up via `apollo-link-context`
+* `@rest` these include any other parameters you pass to the `@rest()` directive. This is probably more useful when working with `pathBuilder`, documented below.
+
+<h4 id="rest.arguments.pathBuilder">`pathBuilder`</h4>
+
+If the variable-replacement options described above aren't enough, you can provide a `pathBuilder` to your query. This will be called to dynamically construct the path. This is considered an advanced feature, and is documented in the source -- it also should be considered syntactically unstable, and we're looking for feedback!
 
 <h4 id="rest.arguments.body">`bodyKey` / `bodyBuilder`</h4>
 
@@ -400,7 +432,7 @@ mutation publishPost(
   publishedPost: publish(input: "Foo", body: $someApiWithACustomBodyKey)
     @rest(
       type: "Post"
-      path: "/posts/:input/new"
+      path: "/posts/{args.input}/new"
       method: "POST"
       bodyKey: "body"
     ) {
@@ -515,11 +547,11 @@ An example use-case would be getting a list of users, and hitting a different en
 ```graphql
 const QUERY = gql`
   query RestData($email: String!) {
-    users @rest(path: '/users/email/:email', params: { email: $email }, method: 'GET', type: 'User') {
+    users @rest(path: '/users/email?{args.email}', method: 'GET', type: 'User') {
       id @export(as: "id")
       firstName
       lastName
-      friends @rest(path: '/friends/:id', params: { id: $id }, type: '[User]') {
+      friends @rest(path: '/friends/{exportVariables.id}', type: '[User]') {
         firstName
         lastName
       }
@@ -535,7 +567,7 @@ You can write also mutations with the apollo-link-rest, for example:
 ```graphql
   mutation deletePost($id: ID!) {
     deletePostResponse(id: $id)
-      @rest(type: "Post", path: "/posts/:id", method: "DELETE") {
+      @rest(type: "Post", path: "/posts/{args.id}", method: "DELETE") {
       NoResponse
     }
   }

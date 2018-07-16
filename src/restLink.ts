@@ -29,6 +29,8 @@ import {
 import { graphql } from 'graphql-anywhere/lib/async';
 import { Resolver, ExecInfo } from 'graphql-anywhere';
 
+import * as qs from 'qs';
+
 export namespace RestLink {
   export type URI = string;
 
@@ -75,6 +77,22 @@ export namespace RestLink {
     request: RequestInfo,
     init: RequestInit,
   ) => Promise<Response>;
+
+  export interface RestLinkHelperProps {
+    /** Arguments passed in via normal graphql parameters */
+    args: { [key: string]: any };
+    /** Arguments added via @export(as: ) directives */
+    exportVariables: { [key: string]: any };
+    /** Arguments passed directly to @rest(params: ) */
+    // params: { [key: string]: any };
+    /** Apollo Context */
+    context: { [key: string]: any };
+    /** All arguments passed to the `@rest(...)` directive */
+    '@rest': { [key: string]: any };
+  }
+  export interface PathBuilderProps extends RestLinkHelperProps {
+    replacer: (opts: RestLinkHelperProps) => string;
+  }
 
   /**
    * Used for any Error from the server when requests:
@@ -181,16 +199,20 @@ export namespace RestLink {
      *  state when processing this @rest(...) call.
      *
      * - @optional if you provide: @see DirectiveOptions.path
-     * - **note**: this does not do any URI encoding on the result, so be aware if you're
-     *  making a query-string!
+     * - **note**: providing this function means it's your responsibility to call
+     *             encodeURIComponent directly if needed!
+     *
+     * Warning: This is an Advanced API and we are looking for syntactic & ergonomics feedback.
      */
-    pathBuilder?: (args: object) => string;
+    pathBuilder?: (props: PathBuilderProps) => string;
     /**
      * Optional method that constructs a RequestBody out of the Environmental state
      * when processing this @rest(...) call.
      * @default function that extracts the bodyKey from the args.
+     *
+     * Warning: This is an Advanced API and we are looking for syntactic & ergonomics feedback.
      */
-    bodyBuilder?: (args: object) => object;
+    bodyBuilder?: (props: RestLinkHelperProps) => object;
     /**
      * Optional field that defines the name of the env var to extract and use as the body
      * @default "input"
@@ -240,6 +262,14 @@ const addTypeNameToResult = (
     // Recursion needed for multi-dimensional arrays
     return result.map(e => addTypeNameToResult(e, fixedTypename, typePatcher));
   }
+  if (
+    null == result ||
+    typeof result === 'number' ||
+    typeof result === 'boolean' ||
+    typeof result === 'string'
+  ) {
+    return result;
+  }
   return typePatcher(result, __typename, typePatcher);
 };
 
@@ -268,7 +298,13 @@ function findRestDirectivesThenInsertNullsForOmittedFields(
   fragmentMap: FragmentMap,
   currentSelectionSet: SelectionSetNode,
 ): any[] | object {
-  if (current == null || currentSelectionSet == null) {
+  if (
+    currentSelectionSet == null ||
+    null == current ||
+    typeof current === 'number' ||
+    typeof current === 'boolean' ||
+    typeof current === 'string'
+  ) {
     return current;
   }
   currentSelectionSet.selections.forEach(node => {
@@ -339,7 +375,12 @@ function insertNullsForAnyOmittedFields(
   fragmentMap: FragmentMap,
   currentSelectionSet: SelectionSetNode,
 ): void {
-  if (current == null || currentSelectionSet == null) {
+  if (
+    null == current ||
+    typeof current === 'number' ||
+    typeof current === 'boolean' ||
+    typeof current === 'string'
+  ) {
     return;
   }
   if (Array.isArray(current)) {
@@ -410,7 +451,8 @@ const getURIFromEndpoints = (
   );
 };
 
-const replaceParam = (
+/** Replaces params in the path, keyed by colons */
+const replaceLegacyParam = (
   endpoint: string,
   name: string,
   value: string,
@@ -420,6 +462,104 @@ const replaceParam = (
   }
   return endpoint.replace(`:${name}`, value);
 };
+
+class PathBuilder {
+  private static cache: {
+    [path: string]: (props: RestLink.PathBuilderProps) => string;
+  } = {};
+  private static warnTable: { [key: string]: true } = {};
+  private static argReplacement = /({.*})/;
+
+  static replacerForPath(
+    path: string,
+  ): (props: RestLink.PathBuilderProps) => string {
+    if (path in PathBuilder.cache) {
+      return PathBuilder.cache[path];
+    }
+
+    const queryOrigStartIndex = path.indexOf('?');
+    const pathBits = path.split(PathBuilder.argReplacement);
+
+    const chunkActions: Array<
+      | true // We're enabling the qs-encoder
+      | string // This is a raw string bit, don't mess with it
+      | ((props: RestLink.RestLinkHelperProps, useQSEncoder: boolean) => string)
+    > = [];
+
+    let hasBegunQuery = false;
+    pathBits.reduce((processedCount, bit) => {
+      if (bit === '' || bit === '{}') {
+        // Empty chunk, do nothing
+        return processedCount + bit.length;
+      }
+      const nextIndex = processedCount + bit.length;
+      if (bit[0] === '{' && bit[bit.length - 1] === '}') {
+        // Replace some args!
+        const _keyPath = bit.slice(1, bit.length - 2).split('.');
+
+        chunkActions.push(
+          (props: RestLink.RestLinkHelperProps, useQSEncoder: boolean) => {
+            try {
+              const value = PathBuilderLookupValue(props, _keyPath);
+              if (
+                !useQSEncoder ||
+                (typeof value !== 'object' || value == null)
+              ) {
+                return String(value);
+              } else {
+                return qs.stringify(value);
+              }
+            } catch (e) {
+              const key = [path, _keyPath.join('.')].join('|');
+              if (!(key in PathBuilder.warnTable)) {
+                console.warn(
+                  'Warning: RestLink caught an error while unpacking',
+                  key,
+                  "This tends to happen if you forgot to pass a parameter needed for creating an @rest(path, or if RestLink was configured to deeply unpack a path parameter that wasn't provided. This message will only log once per detected instance. Trouble-shooting hint: check @rest(path: and the variables provided to this query.",
+                );
+                PathBuilder.warnTable[key] = true;
+              }
+              return '';
+            }
+          },
+        );
+      } else {
+        chunkActions.push(bit);
+        if (!hasBegunQuery && nextIndex >= queryOrigStartIndex) {
+          hasBegunQuery = true;
+          chunkActions.push(true);
+        }
+      }
+      return nextIndex;
+    }, 0);
+
+    const result: (props: RestLink.PathBuilderProps) => string = props => {
+      let hasEnteredQuery = false;
+      const tmp = chunkActions.reduce((accumulator: string, action): string => {
+        if (typeof action === 'string') {
+          return accumulator + action;
+        } else if (typeof action === 'boolean') {
+          hasEnteredQuery = true;
+          return accumulator;
+        } else {
+          return accumulator + action(props, hasEnteredQuery);
+        }
+      }, '') as string;
+      return tmp;
+    };
+    return (PathBuilder.cache[path] = result);
+  }
+}
+
+/** Private Helper Function */
+function PathBuilderLookupValue(tmp: object, keyPath: string[]) {
+  if (keyPath.length === 0) {
+    return tmp;
+  }
+  const remainingKeyPath = [...keyPath]; // Copy before mutating
+  const key = remainingKeyPath.shift();
+  return PathBuilderLookupValue(tmp[key], remainingKeyPath);
+}
 
 /**
  * Some keys should be passed through transparently without normalizing/de-normalizing
@@ -682,8 +822,8 @@ const resolver: Resolver = async (
   }
 
   const isNotARestCall = !directives || !directives.rest;
-  if (isLeaf || isNotARestCall) {
-    // This is a leaf API call, it's not tagged with @rest()
+  if (isNotARestCall) {
+    // This is not tagged with @rest()
     // This might not belong to us so return the aliasNode version preferentially
     return aliasedNode || preAliasingNode;
   }
@@ -710,38 +850,54 @@ const resolver: Resolver = async (
   } = directives.rest as RestLink.DirectiveOptions;
   const uri = getURIFromEndpoints(endpoints, endpoint);
   try {
-    const argsWithExport = { ...args, ...exportVariables };
-
-    const bothPathsProvided = path != null && pathBuilder != null;
     const neitherPathsProvided = path == null && pathBuilder == null;
 
-    if (bothPathsProvided || neitherPathsProvided) {
-      const pathBuilderState = bothPathsProvided
-        ? 'both, please remove one!'
-        : 'neither, please add one!';
+    if (neitherPathsProvided) {
       throw new Error(
-        `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
-          `This request had ${pathBuilderState}`,
+        `One of ("path" | "pathBuilder") must be set in the @rest() directive. This request had neither, please add one`,
       );
     }
     if (!pathBuilder) {
-      pathBuilder = (args: object): string => {
-        const pathWithParams = Object.keys(args).reduce(
-          (acc, e) => replaceParam(acc, e, args[e]),
-          path,
+      if (!path.includes(':')) {
+        // Colons are the legacy route, and aren't uri encoded anyhow.
+        pathBuilder = PathBuilder.replacerForPath(path);
+      } else {
+        console.warn(
+          "Deprecated: '@rest(path:' contains a ':' colon, this format will be removed in future versions",
         );
-        if (pathWithParams.includes(':')) {
-          throw new Error(
-            'Missing parameters to run query, specify it in the query params or use ' +
-              'an export directive. (If you need to use ":" inside a variable string' +
-              ' make sure to encode the variables properly using `encodeURIComponent' +
-              '`. Alternatively see documentation about using pathBuilder.)',
+
+        pathBuilder = ({
+          args,
+          exportVariables,
+        }: RestLink.PathBuilderProps): string => {
+          const legacyArgs = {
+            ...args,
+            ...exportVariables,
+          };
+          const pathWithParams = Object.keys(legacyArgs).reduce(
+            (acc, e) => replaceLegacyParam(acc, e, legacyArgs[e]),
+            path,
           );
-        }
-        return pathWithParams;
-      };
+          if (pathWithParams.includes(':')) {
+            throw new Error(
+              'Missing parameters to run query, specify it in the query params or use ' +
+                'an export directive. (If you need to use ":" inside a variable string' +
+                ' make sure to encode the variables properly using `encodeURIComponent' +
+                '`. Alternatively see documentation about using pathBuilder.)',
+            );
+          }
+          return pathWithParams;
+        };
+      }
     }
-    const pathWithParams = pathBuilder(argsWithExport);
+    const allParams: RestLink.PathBuilderProps = {
+      args,
+      exportVariables,
+      context,
+      '@rest': directives.rest,
+      replacer: pathBuilder,
+    };
+    const pathWithParams = pathBuilder(allParams);
 
     let {
       method,
@@ -766,7 +922,9 @@ const resolver: Resolver = async (
         // By convention GraphQL recommends mutations having a single argument named "input"
         // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
 
-        const maybeBody = argsWithExport[bodyKey || 'input'];
+        const maybeBody =
+          allParams.exportVariables[bodyKey || 'input'] ||
+          allParams.args[bodyKey || 'input'];
         if (!maybeBody) {
           throw new Error(
             '[GraphQL mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
@@ -778,7 +936,7 @@ const resolver: Resolver = async (
         };
       }
       body = convertObjectKeys(
-        bodyBuilder(argsWithExport),
+        bodyBuilder(allParams),
         perRequestNameDenormalizer ||
           linkLevelNameDenormalizer ||
           noOpNameNormalizer,

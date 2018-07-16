@@ -100,42 +100,7 @@ describe('Configuration', async () => {
         );
       } catch (error) {
         expect(error.message).toBe(
-          `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
-            `This request had neither, please add one!`,
-        );
-      }
-    });
-
-    it('throws if both path and pathBuilder are simultaneously provided', async () => {
-      expect.assertions(1);
-
-      const link = new RestLink({ uri: '/api' });
-      const post = { id: '1', title: 'Love apollo' };
-      fetchMock.get('/api/post/1', post);
-
-      const postTitleQuery = gql`
-        query postTitle($pathBuilder: any) {
-          post @rest(type: "Post", path: "/post/1", pathBuilder: $pathBuilder) {
-            id
-            title
-          }
-        }
-      `;
-
-      try {
-        await makePromise<Result>(
-          execute(link, {
-            operationName: 'postTitle',
-            query: postTitleQuery,
-            variables: {
-              pathBuilder: (args: any) => '/whatever',
-            },
-          }),
-        );
-      } catch (error) {
-        expect(error.message).toBe(
-          `One and only one of ("path" | "pathBuilder") must be set in the @rest() directive. ` +
-            `This request had both, please remove one!`,
+          'One of ("path" | "pathBuilder") must be set in the @rest() directive. This request had neither, please add one',
         );
       }
     });
@@ -875,6 +840,50 @@ describe('Query single call', () => {
 
     expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
   });
+  it('can run a query that returns a scalar (simple types like string, number, boolean) response', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+    const stringResp = 'SecretString';
+    fetchMock.get('/api/config', JSON.stringify(stringResp));
+
+    const serverConfigQuery = gql`
+      query config {
+        config @rest(type: "String", path: "/config")
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'serverConfig',
+        query: serverConfigQuery,
+      }),
+    );
+
+    expect(data).toMatchObject({ config: stringResp });
+  });
+
+  it('can run a query that returns an array of scalars', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const arrayResp = ['Id1', 'Id2'];
+    fetchMock.get('/api/admins', JSON.stringify(arrayResp));
+    const adminsQuery = gql`
+      query adminIds {
+        admins @rest(type: "[String!]!", path: "/admins")
+      }
+    `;
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'adminIds',
+        query: adminsQuery,
+      }),
+    );
+
+    expect(data).toMatchObject({ admins: arrayResp });
+  });
 
   it('can get query params regardless of the order', async () => {
     expect.assertions(1);
@@ -1214,8 +1223,13 @@ describe('Query single call', () => {
       post: { ...postWithNest, __typename: 'Post' },
     });
   });
+});
 
-  it('can build the path using pathBuilder', async () => {
+describe('Use a custom pathBuilder', () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+  it('in a basic way', async () => {
     expect.assertions(4);
 
     const link = new RestLink({ uri: '/api' });
@@ -1238,7 +1252,11 @@ describe('Query single call', () => {
       }
     `;
 
-    function createPostsPath(variables) {
+    function createPostsPath({
+      args,
+      exportVariables,
+    }: RestLink.PathBuilderProps) {
+      const variables = { ...args, ...exportVariables };
       const qs = Object.keys(variables).reduce(
         (acc: string, key: string): string => {
           if (variables[key] === null || variables[key] === undefined) {
@@ -1316,6 +1334,10 @@ describe('Query single call', () => {
       posts: [{ ...posts2[0], __typename: 'Post' }],
     });
   });
+
+  // TODO: Test for Path using context
+  // TODO: Test for PathBuilder using replacer
+  // TODO: Test for PathBuilder using @rest
 });
 
 describe('Query multiple calls', () => {
@@ -2456,7 +2478,7 @@ describe('Mutation', () => {
           }
         }
       `;
-      function fakeEncryption(args) {
+      function fakeEncryption({ args }: RestLink.RestLinkHelperProps) {
         return 'MAGIC_PREFIX' + JSON.stringify(args.input);
       }
 
@@ -2477,11 +2499,18 @@ describe('Mutation', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify(
-            fakeEncryption({ input: { title: post.title } }),
+            fakeEncryption({
+              args: { input: { title: post.title } },
+              exportVariables: {},
+              context: {},
+              '@rest': {},
+            }),
           ),
         }),
       );
     });
+    // TODO: Test for BodyBuilder using context
+    // TODO: Test for BodyBuilder using @rest
   });
 
   describe('bodySerializer', () => {

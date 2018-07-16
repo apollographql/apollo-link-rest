@@ -41,12 +41,14 @@
   "peerDependencies": {
     "apollo-link": ">=1",
     "graphql": ">=0.11",
-    "graphql-anywhere": ">=4"
+    "graphql-anywhere": ">=4",
+    "qs": ">=6"
   },
   "devDependencies": {
     "@types/graphql": "0.13.x",
     "@types/jest": "23.x",
     "@types/node": "10.3.x",
+    "@types/qs": "6.5.x",
     "apollo-cache-inmemory": "1.2.x",
     "apollo-client": "2.3.x",
     "apollo-link": "1.2.x",
@@ -68,6 +70,7 @@
     "lodash": "4.17.x",
     "pre-commit": "1.2.x",
     "prettier": "1.13.x",
+    "qs": "6.5.x",
     "rimraf": "2.6.x",
     "rollup": "0.59.x",
     "rollup-plugin-local-resolve": "1.0.x",
