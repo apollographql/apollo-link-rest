@@ -495,7 +495,7 @@ class PathBuilder {
       const nextIndex = processedCount + bit.length;
       if (bit[0] === '{' && bit[bit.length - 1] === '}') {
         // Replace some args!
-        const _keyPath = bit.slice(1, bit.length - 2).split('.');
+        const _keyPath = bit.slice(1, bit.length - 1).split('.');
 
         chunkActions.push(
           (props: RestLink.RestLinkHelperProps, useQSEncoder: boolean) => {

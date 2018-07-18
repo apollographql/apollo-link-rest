@@ -1335,6 +1335,66 @@ describe('Use a custom pathBuilder', () => {
     });
   });
 
+  it('with correctly encoded params', async () => {
+    // expect.assertions(4);
+
+    const link = new RestLink({ uri: '/api' });
+    const posts1 = [{ id: '1', title: 'Love apollo' }];
+    // This is an invalid URL because it doesn't have an encoded space, this is to prove
+    // we didn't encode it if it wasn't prefixed by '?' or '&' ?{args} or &{args}
+    fetchMock.get('/api/posts?name=Love apollo', posts1);
+    // This URL is legacy (shouldn't be called)
+    fetchMock.get('/api/posts?name=Love+apollo', posts1);
+    // This URL is correctly encoded
+    fetchMock.get('/api/posts?name=Love%20apollo', posts1);
+
+    const nonEncodedQuery = gql`
+      query postQuery($name: String, $pathFunction: any) {
+        posts(name: $name)
+          @rest(
+            type: "Post"
+            path: "/posts?name={args.name}"
+            pathBuilder: $pathFunction
+          ) {
+          id
+          title
+        }
+      }
+    `;
+    const encodedQuery = gql`
+      query postQuery($name: String, $pathFunction: any) {
+        posts(name: $name)
+          @rest(
+            type: "Post"
+            path: "/posts?{args}"
+            pathBuilder: $pathFunction
+          ) {
+          id
+          title
+        }
+      }
+    `;
+
+    await makePromise<Result>(
+      execute(link, {
+        operationName: 'postQuery',
+        query: nonEncodedQuery,
+        variables: { name: 'Love apollo' },
+      }),
+    );
+
+    expect(fetchMock.called('/api/posts?name=Love apollo')).toBe(true);
+
+    await makePromise<Result>(
+      execute(link, {
+        operationName: 'postQuery',
+        query: encodedQuery,
+        variables: { name: 'Love apollo' },
+      }),
+    );
+
+    expect(fetchMock.called('/api/posts?name=Love%20apollo')).toBe(true);
+  });
   // TODO: Test for Path using context
   // TODO: Test for PathBuilder using replacer
   // TODO: Test for PathBuilder using @rest
