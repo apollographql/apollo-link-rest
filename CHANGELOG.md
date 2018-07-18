@@ -4,6 +4,11 @@
 
 ### v0.next
 
+### v0.4.1
+
+* Fix: Correctly slicing nested key-paths [#134](https://github.com/apollographql/apollo-link-rest/issues/134)
+* Fix: Improve Types for ServerError [#133](https://github.com/apollographql/apollo-link-rest/pull/133)
+
 ### v0.4.0
 
 Breaking changes around `path`-variable replacement and `pathBuilder` (previously undocumented, [#132](https://github.com/apollographql/apollo-link-rest/issues/132)).
