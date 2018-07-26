@@ -468,7 +468,7 @@ class PathBuilder {
     [path: string]: (props: RestLink.PathBuilderProps) => string;
   } = {};
   private static warnTable: { [key: string]: true } = {};
-  private static argReplacement = /({.*})/;
+  private static argReplacement = /({[._a-zA-Z0-9]*})/;
 
   static replacerForPath(
     path: string,

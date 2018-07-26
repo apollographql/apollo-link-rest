@@ -1347,28 +1347,30 @@ describe('Use a custom pathBuilder', () => {
     fetchMock.get('/api/posts?name=Love+apollo', posts1);
     // This URL is correctly encoded
     fetchMock.get('/api/posts?name=Love%20apollo', posts1);
+    // Uses a query string & a path replacement
+    fetchMock.get('/api/posts/1?comments=5', posts1);
 
     const nonEncodedQuery = gql`
-      query postQuery($name: String, $pathFunction: any) {
+      query postQuery($name: String) {
         posts(name: $name)
-          @rest(
-            type: "Post"
-            path: "/posts?name={args.name}"
-            pathBuilder: $pathFunction
-          ) {
+          @rest(type: "Post", path: "/posts?name={args.name}") {
           id
           title
         }
       }
     `;
     const encodedQuery = gql`
-      query postQuery($name: String, $pathFunction: any) {
-        posts(name: $name)
-          @rest(
-            type: "Post"
-            path: "/posts?{args}"
-            pathBuilder: $pathFunction
-          ) {
+      query postQuery($name: String) {
+        posts(name: $name) @rest(type: "Post", path: "/posts?{args}") {
+          id
+          title
+        }
+      }
+    `;
+    const mixedQuery = gql`
+      query postQuery($id: String, $query: Any) {
+        posts(id: $id, query: $query)
+          @rest(type: "Post", path: "/posts/{args.id}?{args.query}") {
           id
           title
         }
@@ -1394,6 +1396,16 @@ describe('Use a custom pathBuilder', () => {
     );
 
     expect(fetchMock.called('/api/posts?name=Love%20apollo')).toBe(true);
+
+    await makePromise<Result>(
+      execute(link, {
+        operationName: 'postQuery',
+        query: mixedQuery,
+        variables: { id: 1, query: { comments: 5 } },
+      }),
+    );
+
+    expect(fetchMock.called('/api/posts/1?comments=5')).toBe(true);
   });
   // TODO: Test for Path using context
   // TODO: Test for PathBuilder using replacer
