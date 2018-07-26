@@ -463,11 +463,15 @@ const replaceLegacyParam = (
   return endpoint.replace(`:${name}`, value);
 };
 
-class PathBuilder {
+/** Internal Tool that Parses Paths for RestLink -- This API should be considered experimental */
+export class PathBuilder {
+  /** For accelerating the replacement of paths that are used a lot */
   private static cache: {
     [path: string]: (props: RestLink.PathBuilderProps) => string;
   } = {};
+  /** Table to limit the amount of nagging (due to probable API Misuse) we do to once per path per launch */
   private static warnTable: { [key: string]: true } = {};
+  /** Regexp that finds things that are eligible for variable replacement */
   private static argReplacement = /({[._a-zA-Z0-9]*})/;
 
   static replacerForPath(

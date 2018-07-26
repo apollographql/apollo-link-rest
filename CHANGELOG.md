@@ -4,6 +4,10 @@
 
 ### v0.next
 
+### v0.4.3
+
+* Expose an internal helper class (PathBuilder) for experimentation
+
 ### v0.4.2
 
 * Fix: Bad regexp causes path-replacements with multiple replacement slots to fail [#135](https://github.com/apollographql/apollo-link-rest/issues/135)
