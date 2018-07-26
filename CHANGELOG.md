@@ -4,6 +4,10 @@
 
 ### v0.next
 
+### v0.4.2
+
+* Fix: Bad regexp causes path-replacements with multiple replacement slots to fail [#135](https://github.com/apollographql/apollo-link-rest/issues/135)
+
 ### v0.4.1
 
 * Fix: Correctly slicing nested key-paths [#134](https://github.com/apollographql/apollo-link-rest/issues/134)
