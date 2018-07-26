@@ -4,7 +4,7 @@
 
 ### v0.next
 
-### v0.4.3
+### v0.4.3, v0.4.4
 
 * Expose an internal helper class (PathBuilder) for experimentation
 
