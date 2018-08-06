@@ -53,7 +53,7 @@
     "apollo-client": "2.3.x",
     "apollo-link": "1.2.x",
     "apollo-link-error": "1.1.x",
-    "apollo-link-http": "1.5.x",
+    "apollo-link-http": "^1.5.4",
     "browserify": "16.2.x",
     "bundlesize": "0.17.x",
     "camelcase": "5.0.x",
@@ -97,6 +97,7 @@
       "js",
       "json"
     ],
+    "testURL": "http://localhost/",
     "setupFiles": [
       "./scripts/jest.js"
     ]

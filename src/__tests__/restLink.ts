@@ -1,7 +1,8 @@
-import { execute, makePromise, ApolloLink } from 'apollo-link';
+import { execute, makePromise, ApolloLink, from } from 'apollo-link';
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import { onError } from 'apollo-link-error';
+import { HttpLink } from 'apollo-link-http';
 
 import gql, { disableFragmentWarnings } from 'graphql-tag';
 disableFragmentWarnings();
@@ -66,6 +67,75 @@ describe('Configuration', async () => {
       expect(() => {
         new RestLink({ bogus: '' } as any);
       }).toThrow();
+    });
+
+    it('should work alongside apollo-link-http', async () => {
+      const posts = [{ title: 'Love apollo' }, { title: 'Respect apollo' }];
+      const authors = { data: { authors: [{ id: 1 }, { id: 2 }, { id: 3 }] } };
+
+      fetchMock.get('/api/posts', posts);
+      fetchMock.post('/graphql', authors);
+
+      const restLink = new RestLink({ uri: '/api' });
+      const httpLink = new HttpLink({ uri: '/graphql' });
+
+      const link = from([restLink, httpLink]);
+
+      const restQuery = gql`
+        query {
+          people @rest(type: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+
+      const httpQuery = gql`
+        query {
+          authors {
+            id
+          }
+        }
+      `;
+
+      const combinedQuery = gql`
+        query {
+          authors {
+            id
+          }
+          people @rest(type: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+
+      const { data: restData } = await makePromise<Result>(
+        execute(link, { operationName: 'restQuery', query: restQuery }),
+      );
+
+      const { data: httpData } = await makePromise<Result>(
+        execute(link, { operationName: 'httpData', query: httpQuery }),
+      );
+
+      const { data: combinedData } = await makePromise<Result>(
+        execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+      );
+
+      expect(restData).toEqual({
+        people: [
+          { title: 'Love apollo', __typename: 'Post' },
+          { title: 'Respect apollo', __typename: 'Post' },
+        ],
+      });
+
+      expect(httpData).toEqual({ authors: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+
+      expect(combinedData).toEqual({
+        people: [
+          { title: 'Love apollo', __typename: 'Post' },
+          { title: 'Respect apollo', __typename: 'Post' },
+        ],
+        authors: [{ id: 1 }, { id: 2 }, { id: 3 }],
+      });
     });
 
     it('throws with mismatched config', () => {
