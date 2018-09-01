@@ -977,33 +977,40 @@ const resolver: Resolver = async (
       ...(credentials ? { credentials } : {}),
     })
       .then(async res => {
-        if (res.status >= 300) {
-          // Throw a JSError, that will be available under the
-          // "Network error" category in apollo-link-error
-          let parsed: any;
-          // responses need to be cloned as they can only be read once
-          try {
-            parsed = await res.clone().json();
-          } catch (error) {
-            // its not json
-            parsed = await res.clone().text();
-          }
-          rethrowServerSideError(
-            res,
-            parsed,
-            `Response not successful: Received status code ${res.status}`,
-          );
-        }
-        return res;
-      })
-      .then(res => {
         context.responses.push(res);
+
         // HTTP-204 means "no-content", similarly Content-Length implies the same
         // This commonly occurs when you POST/PUT to the server, and it acknowledges
         // success, but doesn't return your Resource.
-        return res.status === 204 || res.headers.get('Content-Length') === '0'
-          ? Promise.resolve({})
-          : res.json();
+        if (res.status === 204 || res.headers.get('Content-Length') === '0') {
+          return Promise.resolve({});
+        }
+        // All other success responses
+        if (res.status < 300) {
+          return res.json();
+        }
+
+        // In a GraphQL context a missing resource should be indicated by
+        // a null value rather than throwing a network error
+        if (res.status === 404) {
+          return Promise.resolve(null);
+        }
+        // Default error handling:
+        // Throw a JSError, that will be available under the
+        // "Network error" category in apollo-link-error
+        let parsed: any;
+        // responses need to be cloned as they can only be read once
+        try {
+          parsed = await res.clone().json();
+        } catch (error) {
+          // its not json
+          parsed = await res.clone().text();
+        }
+        rethrowServerSideError(
+          res,
+          parsed,
+          `Response not successful: Received status code ${res.status}`,
+        );
       })
       .then(
         result =>
