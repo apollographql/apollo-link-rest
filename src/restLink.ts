@@ -1153,6 +1153,12 @@ export class RestLink extends ApolloLink {
       [DEFAULT_SERIALIZER_KEY]: defaultSerializer || DEFAULT_JSON_SERIALIZER,
       ...(bodySerializers || {}),
     };
+
+    if (!this.headers.has('Accept')) {
+      // Since we assume a json body on successful responses set the Accept
+      // header accordingly if it is not provided by the user
+      this.headers.set('Accept', 'application/json');
+    }
   }
 
   public request(
