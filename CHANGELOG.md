@@ -4,6 +4,13 @@
 
 ### v0.next
 
+### v0.5.0
+
+* Breaking Change: 404s now no longer throw an error! It's just null data! [#142](https://github.com/apollographql/apollo-link-rest/pull/142)
+* Default Accept header if no header configured for `Accept:` [#143](https://github.com/apollographql/apollo-link-rest/pull/143)
+* Improve/enable Support for Nested Queries from different apollo-links [#138](https://github.com/apollographql/apollo-link-rest/pull/138)
+* Remove Restriction that Mutation must not contain GET queries & vice versa [#140](https://github.com/apollographql/apollo-link-rest/issues/140)
+
 ### v0.4.3, v0.4.4
 
 * Expose an internal helper class (PathBuilder) for experimentation
