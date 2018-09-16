@@ -687,22 +687,22 @@ const makeOverrideHeadersMergePolicy = (
   };
 };
 
+const SUPPORTED_HTTP_VERBS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+
 export const validateRequestMethodForOperationType = (
   method: string,
   operationType: OperationTypeNode,
 ): void => {
   switch (operationType) {
     case 'query':
-      if (method.toUpperCase() !== 'GET') {
-        throw new Error(
-          `A "query" operation can only support "GET" requests but got "${method}".`,
-        );
+      if (SUPPORTED_HTTP_VERBS.indexOf(method.toUpperCase()) !== -1) {
+        return;
       }
-      return;
+      throw new Error(
+        `A "query" operation can only support "GET" requests but got "${method}".`,
+      );
     case 'mutation':
-      if (
-        ['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(method.toUpperCase()) !== -1
-      ) {
+      if (SUPPORTED_HTTP_VERBS.indexOf(method.toUpperCase()) !== -1) {
         return;
       }
       throw new Error('"mutation" operations do not support that HTTP-verb');

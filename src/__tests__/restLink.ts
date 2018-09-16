@@ -1811,40 +1811,6 @@ describe('Query options', () => {
         expect.objectContaining({ method: 'GET' }),
       );
     });
-
-    it('throws if query method is not GET', async () => {
-      expect.assertions(2);
-
-      const link = new RestLink({ uri: '/api' });
-
-      const post = { id: '1', title: 'Love apollo' };
-      fetchMock.get('/api/post/1', post);
-
-      const postTitleQuery = gql`
-        query postTitle {
-          post(id: "1") @rest(type: "Post", path: "/post/:id", method: "POST") {
-            id
-            title
-          }
-        }
-      `;
-
-      try {
-        await makePromise<Result>(
-          execute(link, {
-            operationName: 'postTitle',
-            query: postTitleQuery,
-            variables: { id: '1' },
-          }),
-        );
-      } catch (error) {
-        expect(error.message).toBe(
-          'A "query" operation can only support "GET" requests but got "POST".',
-        );
-      }
-
-      expect(fetchMock.called('/api/post/1')).toBe(false);
-    });
   });
 
   describe('headers', () => {
@@ -2928,10 +2894,7 @@ describe('Mutation', () => {
 describe('validateRequestMethodForOperationType', () => {
   describe('for operation type "mutation"', () => {
     it('throws because it is not supported yet', () => {
-      expect.assertions(2);
-      expect(() =>
-        validateRequestMethodForOperationType('GET', 'mutation'),
-      ).toThrowError('"mutation" operations do not support that HTTP-verb');
+      expect.assertions(1);
       expect(() =>
         validateRequestMethodForOperationType('GIBBERISH', 'mutation'),
       ).toThrowError('"mutation" operations do not support that HTTP-verb');
