@@ -45,61 +45,46 @@
     "qs": ">=6"
   },
   "devDependencies": {
-    "@types/graphql": "0.13.x",
+    "@babel/core": "7.0.x",
+    "@types/graphql": "14.x",
     "@types/jest": "23.x",
-    "@types/node": "10.3.x",
+    "@types/node": "10.x",
     "@types/qs": "6.5.x",
     "apollo-cache-inmemory": "1.2.x",
-    "apollo-client": "2.3.x",
+    "apollo-client": "2.4.x",
     "apollo-link": "1.2.x",
     "apollo-link-error": "1.1.x",
     "apollo-link-http": "1.5.x",
     "browserify": "16.2.x",
     "bundlesize": "0.17.x",
     "camelcase": "5.0.x",
-    "codecov": "3.0.x",
-    "danger": "3.7.x",
-    "fetch-mock": "6.4.x",
-    "graphql": "0.13.x",
+    "codecov": "3.x",
+    "danger": "4.x",
+    "fetch-mock": "6.5.x",
+    "graphql": "14.x",
     "graphql-anywhere": "4.1.x",
     "graphql-tag": "2.9.x",
+    "isomorphic-fetch": "2.2.x",
     "jest": "23.x",
     "jest-fetch-mock": "1.6.x",
     "lerna": "2.11.x",
     "lint-staged": "7.2.x",
     "lodash": "4.17.x",
     "pre-commit": "1.2.x",
-    "prettier": "1.13.x",
+    "prettier": "1.14.x",
     "qs": "6.5.x",
     "rimraf": "2.6.x",
-    "rollup": "0.59.x",
+    "rollup": "0.66.x",
     "rollup-plugin-local-resolve": "1.0.x",
     "rollup-plugin-sourcemaps": "0.4.x",
     "snake-case": "2.1.x",
-    "ts-jest": "22.4.x",
-    "typescript": "2.9.x",
+    "ts-jest": "23.1.x",
+    "typescript": "3.x",
     "uglify-js": "3.4.x"
   },
-  "jest": {
-    "globals": {
-      "ts-jest": {
-        "useBabelrc": false,
-        "mapCoverage": true
-      }
-    },
-    "transform": {
-      ".(ts|tsx)": "<rootDir>/node_modules/ts-jest/preprocessor.js"
-    },
-    "testRegex": "(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$",
-    "moduleFileExtensions": [
-      "ts",
-      "tsx",
-      "js",
-      "json"
-    ],
-    "setupFiles": [
-      "./scripts/jest.js"
-    ]
+  "resolutions": {
+    "babel-core": "7.0.0-bridge.0",
+    "babel-jest": "23.6.0"
   },
   "bundlesize": [
     {
