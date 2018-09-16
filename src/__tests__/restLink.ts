@@ -1,4 +1,4 @@
-import { execute, makePromise, ApolloLink } from 'apollo-link';
+import { execute, makePromise, ApolloLink, from } from 'apollo-link';
 import { ApolloClient } from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import { onError } from 'apollo-link-error';
@@ -15,6 +15,8 @@ import {
   validateRequestMethodForOperationType,
   normalizeHeaders,
 } from '../restLink';
+import { HttpLink } from 'apollo-link-http';
+import { withClientState } from 'apollo-link-state';
 
 /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
 const flattenHeaders: ({ headers: Headers }) => { [key: string]: string } = ({
@@ -3212,5 +3214,311 @@ describe('Apollo client integration', () => {
       sub.unsubscribe();
       done();
     }, 0);
+  });
+});
+
+describe('Playing nice with others', () => {
+  afterEach(() => {
+    fetchMock.restore();
+  });
+
+  function buildLinks() {
+    const restLink = new RestLink({ uri: '/api' });
+    const httpLink = new HttpLink({ uri: '/graphql' });
+    const clientLink = withClientState({
+      cache: new InMemoryCache(),
+      defaults: {
+        lastViewedAuthor: {
+          __typename: 'Author',
+          id: 2,
+        },
+      },
+      resolvers: {
+        Query: {
+          lastViewedAuthor() {
+            return { id: 2, __typename: 'Author' };
+          },
+        },
+      },
+    });
+
+    return { restLink, httpLink, clientLink };
+  }
+
+  const posts = [
+    { title: 'Love apollo' },
+    { title: 'Respect apollo', meta: { creatorId: 1 } },
+  ];
+  const authors = { data: { authors: [{ id: 1 }, { id: 2 }, { id: 3 }] } };
+  const authorErrors = {
+    errors: {
+      authors: { message: 'Your query was bad and you should feel bad!' },
+    },
+  };
+
+  it('should work alongside apollo-link-http', async () => {
+    fetchMock.get('/api/posts', posts);
+    fetchMock.post('/graphql', authors);
+    const { restLink, httpLink } = buildLinks();
+    const link = from([restLink, httpLink]);
+    const restQuery = gql`
+      query {
+        people @rest(type: "[Post]", path: "/posts") {
+          title
+        }
+      }
+    `;
+    const httpQuery = gql`
+      query {
+        authors {
+          id
+        }
+      }
+    `;
+    const combinedQuery = gql`
+      query {
+        authors {
+          id
+        }
+        people @rest(type: "[Post]", path: "/posts") {
+          title
+        }
+      }
+    `;
+    const { data: restData } = await makePromise<Result>(
+      execute(link, { operationName: 'restQuery', query: restQuery }),
+    );
+    const { data: httpData } = await makePromise<Result>(
+      execute(link, { operationName: 'httpData', query: httpQuery }),
+    );
+    const { data: combinedData } = await makePromise<Result>(
+      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    );
+    expect(restData).toEqual({
+      people: [
+        { title: 'Love apollo', __typename: 'Post' },
+        { title: 'Respect apollo', __typename: 'Post' },
+      ],
+    });
+    expect(httpData).toEqual({ authors: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+    expect(combinedData).toEqual({
+      people: [
+        { title: 'Love apollo', __typename: 'Post' },
+        { title: 'Respect apollo', __typename: 'Post' },
+      ],
+      authors: [{ id: 1 }, { id: 2 }, { id: 3 }],
+    });
+  });
+
+  it('should work nested in apollo-link-http', async () => {
+    fetchMock.get('/api/posts/1', [posts[0]]);
+    fetchMock.get('/api/posts/2', [posts[1]]);
+    fetchMock.get('/api/posts/3', []);
+    fetchMock.post('/graphql', authors);
+
+    const { restLink, httpLink } = buildLinks();
+    const link = from([restLink, httpLink]);
+
+    const combinedQuery = gql`
+      query {
+        authors {
+          id @export(as: "id")
+          posts @rest(type: "[Post]", path: "/posts/{exportVariables.id}") {
+            title
+          }
+        }
+      }
+    `;
+
+    const { data: combinedData } = await makePromise<Result>(
+      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    );
+
+    expect(combinedData).toEqual({
+      authors: [
+        {
+          id: 1,
+          posts: [{ title: 'Love apollo', __typename: 'Post' }],
+        },
+        {
+          id: 2,
+          posts: [{ title: 'Respect apollo', __typename: 'Post' }],
+        },
+        {
+          id: 3,
+          posts: [],
+        },
+      ],
+    });
+  });
+
+  it('should forward errors from apollo-link-http', async () => {
+    fetchMock.get('/api/posts', posts);
+    fetchMock.post('/graphql', authorErrors);
+    const { restLink, httpLink } = buildLinks();
+    const link = from([restLink, httpLink]);
+
+    const combinedQuery = gql`
+      query {
+        authors {
+          id
+        }
+        people @rest(type: "[Post]", path: "/posts") {
+          title
+        }
+      }
+    `;
+
+    const { data: combinedData, errors } = await makePromise<Result>(
+      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    );
+
+    expect(combinedData).toEqual({
+      people: [
+        { title: 'Love apollo', __typename: 'Post' },
+        { title: 'Respect apollo', __typename: 'Post' },
+      ],
+    });
+
+    expect(errors).toEqual({
+      authors: { message: 'Your query was bad and you should feel bad!' },
+    });
+  });
+
+  it('should work alongside apollo-link-state', async () => {
+    fetchMock.get('/api/posts', posts);
+    const { restLink, clientLink } = buildLinks();
+    // TODO Investigate why this order can't be swapped because client seems to strip the __typename field.
+    const link = from([restLink, clientLink]);
+
+    const combinedQuery = gql`
+      query {
+        lastViewedAuthor @client {
+          id
+        }
+        posts @rest(type: "[Post]", path: "/posts") {
+          title
+        }
+      }
+    `;
+
+    const { data: combinedData } = await makePromise<Result>(
+      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    );
+    expect(combinedData).toEqual({
+      posts: [
+        { title: 'Love apollo', __typename: 'Post' },
+        { title: 'Respect apollo', __typename: 'Post' },
+      ],
+      lastViewedAuthor: {
+        id: 2,
+      },
+    });
+  });
+
+  it('should work nested in apollo-link-state', async () => {
+    fetchMock.get('/api/posts', posts);
+    const { restLink, clientLink } = buildLinks();
+    // TODO Investigate why this order can't be swapped because client seems to strip the __typename field.
+    const link = from([restLink, clientLink]);
+
+    const combinedQuery = gql`
+      query {
+        lastViewedAuthor @client {
+          id
+          people @rest(type: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      }
+    `;
+
+    const { data: combinedData } = await makePromise<Result>(
+      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    );
+    expect(combinedData).toEqual({
+      lastViewedAuthor: {
+        id: 2,
+        people: [
+          { title: 'Love apollo', __typename: 'Post' },
+          { title: 'Respect apollo', __typename: 'Post' },
+        ],
+      },
+    });
+  });
+
+  it('should work with several layers of nesting', async () => {
+    fetchMock.get('/api/posts/1', [posts[0]]);
+    fetchMock.get('/api/posts/2', [posts[1]]);
+    fetchMock.get('/api/posts/3', []);
+    fetchMock.post('/graphql', authors);
+    const { clientLink, restLink, httpLink } = buildLinks();
+
+    const link = from([restLink, clientLink, httpLink]);
+
+    const combinedQuery = gql`
+      query {
+        authors {
+          id
+          lastViewedAuthor @client {
+            id @export(as: "id")
+            posts @rest(type: "[Post]", path: "/posts/{exportVariables.id}") {
+              title
+              meta @type(name: "Meta") {
+                creatorId
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const { data: combinedData } = await makePromise<Result>(
+      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    );
+
+    expect(combinedData).toEqual({
+      authors: [
+        {
+          id: 1,
+          lastViewedAuthor: {
+            id: 2,
+            posts: [
+              {
+                __typename: 'Post',
+                meta: { __typename: 'Meta', creatorId: 1 },
+                title: 'Respect apollo',
+              },
+            ],
+          },
+        },
+        {
+          id: 2,
+          lastViewedAuthor: {
+            id: 2,
+            posts: [
+              {
+                __typename: 'Post',
+                meta: { __typename: 'Meta', creatorId: 1 },
+                title: 'Respect apollo',
+              },
+            ],
+          },
+        },
+        {
+          id: 3,
+          lastViewedAuthor: {
+            id: 2,
+            posts: [
+              {
+                __typename: 'Post',
+                meta: { __typename: 'Meta', creatorId: 1 },
+                title: 'Respect apollo',
+              },
+            ],
+          },
+        },
+      ],
+    });
   });
 });

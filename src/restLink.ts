@@ -30,6 +30,7 @@ import { graphql } from 'graphql-anywhere/lib/async';
 import { Resolver, ExecInfo } from 'graphql-anywhere';
 
 import * as qs from 'qs';
+import { removeRestSetsFromDocument } from './utils';
 
 export namespace RestLink {
   export type URI = string;
@@ -1161,10 +1162,12 @@ export class RestLink extends ApolloLink {
   ): Observable<FetchResult> | null {
     const { query, variables, getContext, setContext } = operation;
     const context: LinkChainContext | any = getContext() as any;
-    const isRestQuery = hasDirectives(['rest'], operation.query);
+    const isRestQuery = hasDirectives(['rest'], query);
     if (!isRestQuery) {
       return forward(operation);
     }
+
+    const nonRest = removeRestSetsFromDocument(query);
 
     // 1. Use the user's merge policy if any
     let headersMergePolicy: RestLink.HeadersMergePolicy =
@@ -1212,31 +1215,40 @@ export class RestLink extends ApolloLink {
       responses: [],
     };
     const resolverOptions = {};
-    return new Observable(observer => {
-      graphql(
-        resolver,
-        queryWithTypename,
-        null,
-        requestContext,
-        variables,
-        resolverOptions,
-      )
-        .then(data => {
-          setContext({
-            restResponses: (context.restResponses || []).concat(
-              requestContext.responses,
-            ),
-          });
-          observer.next({ data });
-          observer.complete();
-        })
-        .catch(err => {
-          if (err.name === 'AbortError') return;
-          if (err.result && err.result.errors) {
-            observer.next(err.result);
-          }
-          observer.error(err);
-        });
-    });
+    let obs;
+    if (nonRest && forward) {
+      operation.query = nonRest;
+      obs = forward(operation);
+    } else obs = Observable.of({ data: {} });
+
+    return obs.flatMap(
+      ({ data, errors }) =>
+        new Observable(observer => {
+          graphql(
+            resolver,
+            queryWithTypename,
+            data,
+            requestContext,
+            variables,
+            resolverOptions,
+          )
+            .then(data => {
+              setContext({
+                restResponses: (context.restResponses || []).concat(
+                  requestContext.responses,
+                ),
+              });
+              observer.next({ data, errors });
+              observer.complete();
+            })
+            .catch(err => {
+              if (err.name === 'AbortError') return;
+              if (err.result && err.result.errors) {
+                observer.next(err.result);
+              }
+              observer.error(err);
+            });
+        }),
+    );
   }
 }
