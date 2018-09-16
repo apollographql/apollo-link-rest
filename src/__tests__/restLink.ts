@@ -1487,6 +1487,42 @@ describe('Query multiple calls', () => {
     expect(data.post).toBeDefined();
     expect(data.post.tags).toBeDefined();
   });
+
+  it('can return a partial result if one out of multiple rest calls fail', async () => {
+    expect.assertions(2);
+
+    const link = new RestLink({ uri: '/api' });
+
+    fetchMock.get('/api/post/1', {
+      status: 404,
+      body: { status: 'error', message: 'Not found' },
+    });
+
+    const tags = [{ name: 'apollo' }, { name: 'graphql' }];
+    fetchMock.get('/api/tags', tags);
+
+    const postAndTags = gql`
+      query postAndTags {
+        post @rest(type: "Post", path: "/post/1") {
+          id
+          title
+        }
+        tags @rest(type: "[Tag]", path: "/tags") {
+          name
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'postAndTags',
+        query: postAndTags,
+      }),
+    );
+
+    expect(data.tags).toBeDefined();
+    expect(data.post).toBeNull();
+  });
 });
 
 describe('GraphQL aliases should work', async () => {
@@ -3148,7 +3184,7 @@ describe('Apollo client integration', () => {
   it('can catch HTTP Status errors', async done => {
     const link = new RestLink({ uri: '/api' });
 
-    const status = 404;
+    const status = 403;
 
     // setup onError link
     const errorLink = onError(opts => {
