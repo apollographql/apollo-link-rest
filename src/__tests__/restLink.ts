@@ -1848,6 +1848,41 @@ describe('Query options', () => {
   });
 
   describe('headers', () => {
+    it('sets the Accept: application/json header if not provided', async () => {
+      expect.assertions(2);
+
+      fetchMock.get('/api/posts', []);
+      const postsQuery = gql`
+        query posts {
+          posts @rest(type: "Post", path: "/posts") {
+            id
+          }
+        }
+      `;
+      const operation = {
+        operationName: 'posts',
+        query: postsQuery,
+      };
+
+      const link1 = new RestLink({ uri: '/api' });
+      await makePromise<Result>(execute(link1, operation));
+
+      const link2 = new RestLink({
+        uri: '/api',
+        headers: {
+          Accept: 'text/plain',
+        },
+      });
+      await makePromise<Result>(execute(link2, operation));
+
+      const requestCalls = fetchMock.calls('/api/posts');
+      expect(orderDupPreservingFlattenedHeaders(requestCalls[0][1])).toEqual([
+        'accept: application/json',
+      ]);
+      expect(orderDupPreservingFlattenedHeaders(requestCalls[1][1])).toEqual([
+        'accept: text/plain',
+      ]);
+    });
     it('adds headers to the request from the context', async () => {
       expect.assertions(2);
 
@@ -1888,6 +1923,7 @@ describe('Query options', () => {
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
       expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'accept: application/json',
         'authorization: 1234',
       ]);
     });
@@ -1977,6 +2013,7 @@ describe('Query options', () => {
       expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
         'setup: setup',
         'setup: in-context duplicate setup',
+        'accept: application/json',
         'authorization: 1234',
         'context: context',
       ]);
@@ -2097,6 +2134,7 @@ describe('Query options', () => {
       expect(orderedFlattened).toEqual([
         'authorization: initial setup',
         'authorization: context',
+        'accept: application/json',
       ]);
     });
   });
