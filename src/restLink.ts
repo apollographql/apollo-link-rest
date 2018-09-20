@@ -79,6 +79,8 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
+  export type ResponseParser = (data: any, typeName: string) => any;
+
   export interface RestLinkHelperProps {
     /** Arguments passed in via normal graphql parameters */
     args: { [key: string]: any };
@@ -174,6 +176,11 @@ export namespace RestLink {
      * @default JSON serialization
      */
     defaultSerializer?: Serializer;
+
+    /**
+     * Parse the response body of an HTTP request into the format that Apollo expects.
+     */
+    responseParser?: ResponseParser;
   };
 
   /** @rest(...) Directive Options */
@@ -772,6 +779,7 @@ interface RequestContext {
   fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
   serializers: RestLink.Serializers;
+  responseParser: RestLink.ResponseParser;
 
   /** An array of the responses from each fetched URL */
   responses: Response[];
@@ -844,6 +852,7 @@ const resolver: Resolver = async (
     fieldNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
+    responseParser,
   } = context;
 
   const fragmentMap = createFragmentMap(fragmentDefinitions);
@@ -1015,6 +1024,10 @@ const resolver: Resolver = async (
       })
       .then(
         result =>
+          responseParser == null ? result : responseParser(result, type),
+      )
+      .then(
+        result =>
           fieldNameNormalizer == null
             ? result
             : convertObjectKeys(result, fieldNameNormalizer),
@@ -1067,6 +1080,7 @@ export class RestLink extends ApolloLink {
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
   private serializers: RestLink.Serializers;
+  private responseParser: RestLink.ResponseParser;
 
   constructor({
     uri,
@@ -1079,6 +1093,7 @@ export class RestLink extends ApolloLink {
     credentials,
     bodySerializers,
     defaultSerializer,
+    responseParser,
   }: RestLink.Options) {
     super();
     const fallback = {};
@@ -1152,6 +1167,7 @@ export class RestLink extends ApolloLink {
       );
     }
 
+    this.responseParser = responseParser || null;
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.fieldNameDenormalizer = fieldNameDenormalizer || null;
     this.headers = normalizeHeaders(headers);
@@ -1226,6 +1242,7 @@ export class RestLink extends ApolloLink {
       typePatcher: this.typePatcher,
       serializers: this.serializers,
       responses: [],
+      responseParser: this.responseParser,
     };
     const resolverOptions = {};
     let obs;
