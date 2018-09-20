@@ -5,10 +5,10 @@ description: Call your REST APIs inside your GraphQL queries.
 
 Calling REST APIs from a GraphQL client opens the benefits GraphQL for more people, whether:
 
-- You are in a front-end developer team that wants to try GraphQL without asking for the backend team to implement a GraphQL server.
-- You have no access to change the backend because it's an existing set of APIs, potentially managed by a 3rd party.
-- You have an existing codebase, but you're looking to evaluate whether GraphQL can work for your needs.
-- You have a large codebase, and the GraphQL migration is happening on the backend, but you want to use GraphQL _now_ without waiting!
+* You are in a front-end developer team that wants to try GraphQL without asking for the backend team to implement a GraphQL server.
+* You have no access to change the backend because it's an existing set of APIs, potentially managed by a 3rd party.
+* You have an existing codebase, but you're looking to evaluate whether GraphQL can work for your needs.
+* You have a large codebase, and the GraphQL migration is happening on the backend, but you want to use GraphQL *now* without waiting!
 
 With `apollo-link-rest`, you can now call your endpoints inside your GraphQL queries and have all your data managed by [`ApolloClient`](../../react/basics/setup.html#ApolloClient). `apollo-link-rest` is suitable for just dipping your toes in the water, or doing a full-steam ahead integration, and then later on migrating to a backend-driven GraphQL experience. `apollo-link-rest` combines well with other links such as [`apollo-link-context`](./context.html), [`apollo-link-state`](./state.html), and others! _For complex back-ends, you may want to consider using [`apollo-server`](/docs/apollo-server/) which you can try out at [launchpad.graphql.com](https://launchpad.graphql.com/)_
 
@@ -42,7 +42,7 @@ import { InMemoryCache } from 'apollo-cache-inmemory';
 import { RestLink } from 'apollo-link-rest';
 
 // setup your `RestLink` with your endpoint
-const link = new RestLink({ uri: 'https://swapi.co/api/' });
+const link = new RestLink({ uri: "https://swapi.co/api/" });
 
 // setup your client
 const client = new ApolloClient({
@@ -82,56 +82,55 @@ client.query({ query }).then(response => {
 
 Construction of `RestLink` takes an options object to customize the behavior of the link. The options you can pass are outlined below:
 
-- `uri: string`: the URI key is a string endpoint/domain for your requests to hit (_optional_ when `endpoints` provides a default)
-- `endpoints: /map-of-endpoints/`: _optional_ map of endpoints -- If you use this, you need to provide `endpoint` to the `@rest(...)` directives.
-- `customFetch?`: _optional_ a custom `fetch` to handle `REST` calls
-- `headers?: Headers`: _optional_ an object representing values to be sent as headers with all requests. [Documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
-- `credentials?`: _optional_ a string representing the credentials policy the fetch call should operate with. [Document here](https://developer.mozilla.org/en-US/docs/Web/API/Request/credentials)
-- `fieldNameNormalizer?: /function/`: _optional_ function that takes the response field name and converts it into a GraphQL compliant name. -- This is useful if your `REST` API returns fields that aren't representable as GraphQL, or if you want to convert between `snake_case` field names in JSON to `camelCase` keyed fields.
-- `fieldNameDenormalizer?: /function/`: _optional_ function that takes a GraphQL-compliant field name and converts it back into an endpoint-specific name.
-- `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
-- `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. The function will also be passed the current `Header` set, which can be updated before the request is sent to `fetch`. Default method uses `JSON.stringify` and sets the `Content-Type` to `application/json`.
-- `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
+* `uri: string`: the URI key is a string endpoint/domain for your requests to hit (_optional_ when `endpoints` provides a default)
+* `endpoints: /map-of-endpoints/`: _optional_ map of endpoints -- If you use this, you need to provide `endpoint` to the `@rest(...)` directives.
+* `customFetch?`: _optional_ a custom `fetch` to handle `REST` calls
+* `headers?: Headers`: _optional_ an object representing values to be sent as headers with all requests. [Documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
+* `credentials?`: _optional_ a string representing the credentials policy the fetch call should operate with. [Document here](https://developer.mozilla.org/en-US/docs/Web/API/Request/credentials)
+* `fieldNameNormalizer?: /function/`: _optional_ function that takes the response field name and converts it into a GraphQL compliant name. -- This is useful if your `REST` API returns fields that aren't representable as GraphQL, or if you want to convert between `snake_case` field names in JSON to `camelCase` keyed fields.
+* `fieldNameDenormalizer?: /function/`: _optional_ function that takes a GraphQL-compliant field name and converts it back into an endpoint-specific name.
+* `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
+* `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. The function will also be passed the current `Header` set, which can be updated before the request is sent to `fetch`. Default method uses `JSON.stringify` and sets the `Content-Type` to `application/json`.
+* `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
 - `responseParser?: /function/`: _optional_ Apollo expects a record response to return a root object, and a collection of records response to return an array of objects. Use this function to structure the response into the format Apollo expects if your response data is structured differently.
+
 
 <h3 id="options.endpoints">Multiple endpoints</h3>
 
 If you want to be able to use multiple endpoints, you should create your link like so:
 
 ```js
-const link = new RestLink({
-  endpoints: { v1: 'api.com/v1', v2: 'api.com/v2' },
-});
+  const link = new RestLink({ endpoints: { v1: 'api.com/v1', v2: 'api.com/v2' } });
 ```
 
 Then you need to specify in the rest directive the endpoint you want to use:
 
 ```js
-const postTitleQuery1 = gql`
-  query postTitle {
-    post @rest(type: "Post", path: "/post", endpoint: "v1") {
-      id
-      title
+  const postTitleQuery1 = gql`
+    query postTitle {
+      post @rest(type: "Post", path: "/post", endpoint: "v1") {
+        id
+        title
+      }
     }
-  }
-`;
-const postTitleQuery2 = gql`
-  query postTitle {
-    post @rest(type: "[Tag]", path: "/tags", endpoint: "v2") {
-      id
-      tags
+  `;
+  const postTitleQuery2 = gql`
+    query postTitle {
+      post @rest(type: "[Tag]", path: "/tags", endpoint: "v2") {
+        id
+        tags
+      }
     }
-  }
-`;
+  `;
 ```
 
 If you have a default endpoint, you can create your link like so:
 
 ```js
-const link = new RestLink({
-  endpoints: { github: 'github.com' },
-  uri: 'api.com',
-});
+  const link = new RestLink({
+    endpoints: { github: 'github.com' },
+    uri: 'api.com',
+  });
 ```
 
 Then if you do not specify an endpoint in your query the default endpoint (the one you specify in the `uri` option.) will be used.
@@ -306,7 +305,7 @@ With the previously defined parser, the following response structure would be su
 }
 ```
 
-<h3 id="options.example">Complete options</h3>
+<h3 id=options.example>Complete options</h3>
 
 Here is one way you might customize `RestLink`:
 
@@ -345,11 +344,11 @@ Here is one way you might customize `RestLink`:
 
 `RestLink` has an [interface `LinkChainContext`](https://github.com/apollographql/apollo-link-rest/blob/1824da47d5db77a2259f770d9c9dd60054c4bb1c/src/restLink.ts#L557-L570) which it uses as the structure of things that it will look for in the `context`, as it decides how to fulfill a specific `RestLink` request. (Please see the [`apollo-link-context`](./context.html) page for a discussion of why you might want this).
 
-- `credentials?: RequestCredentials`: overrides the `RestLink`-level setting for `credentials`. [Values documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
-- `headers?: Headers`: Additional headers provided in this `context-link` [Values documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
-- `headersToOverride?: string[]` If you provide this array, we will merge the headers you provide in this link, by replacing any matching headers that exist in the root `RestLink` configuration. Alternatively you can use `headersMergePolicy` for more fine-grained customization of the merging behavior.
-- `headersMergePolicy?: RestLink.HeadersMergePolicy`: This is a function that decide how the headers returned in this `contextLink` are merged with headers defined at the `RestLink`-level. If you don't provide this, the headers will be simply appended. To use this option, you can provide your own function that decides how to process the headers. [Code references](https://github.com/apollographql/apollo-link-rest/blob/8e57cabb5344209d9cfa391c1614fe8880efa5d9/src/restLink.ts#L462-L510)
-- `restResponses?: Response[]`: This will be populated after the operation has completed with the [Responses](https://developer.mozilla.org/en-US/docs/Web/API/Response) of every REST url fetched during the operation. This can be useful if you need to access the response headers to grab an authorization token for example.
+* `credentials?: RequestCredentials`: overrides the `RestLink`-level setting for `credentials`. [Values documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
+* `headers?: Headers`: Additional headers provided in this `context-link` [Values documented here](https://developer.mozilla.org/en-US/docs/Web/API/Request/headers)
+* `headersToOverride?: string[]` If you provide this array, we will merge the headers you provide in this link, by replacing any matching headers that exist in the root `RestLink` configuration. Alternatively you can use `headersMergePolicy` for more fine-grained customization of the merging behavior.
+* `headersMergePolicy?: RestLink.HeadersMergePolicy`: This is a function that decide how the headers returned in this `contextLink` are merged with headers defined at the `RestLink`-level. If you don't provide this, the headers will be simply appended. To use this option, you can provide your own function that decides how to process the headers. [Code references](https://github.com/apollographql/apollo-link-rest/blob/8e57cabb5344209d9cfa391c1614fe8880efa5d9/src/restLink.ts#L462-L510)
+* `restResponses?: Response[]`: This will be populated after the operation has completed with the [Responses](https://developer.mozilla.org/en-US/docs/Web/API/Response) of every REST url fetched during the operation. This can be useful if you need to access the response headers to grab an authorization token for example.
 
 <h3 id="context.headers">Example</h3>
 
@@ -359,31 +358,27 @@ Here is one way to add request `headers` to the context and retrieve the respons
 
 ```js
 const authRestLink = new ApolloLink((operation, forward) => {
-  operation.setContext(async ({ headers }) => {
-    const token = await localStorage.getItem('token');
+  operation.setContext(async ({headers}) => {
+    const token = await localStorage.getItem("token");
     return {
       headers: {
         ...headers,
-        Accept: 'application/json',
-        Authorization: token,
-      },
+        Accept: "application/json",
+        Authorization: token
+      }
     };
   });
   return forward(operation).map(result => {
     const { restResponses } = operation.getContext();
-    const authTokenResponse = restResponses.find(res =>
-      res.headers.has('Authorization'),
-    );
+    const authTokenResponse = restResponses.find(res => res.headers.has("Authorization"));
     // You might also filter on res.url to find the response of a specific API call
     return authTokenResponse
-      ? localStorage
-          .setItem('token', authTokenResponse.headers.get('Authorization'))
-          .then(() => result)
+      ? localStorage.setItem("token", authTokenResponse.headers.get('Authorization')).then(() => result)
       : result;
   });
 });
 
-const restLink = new RestLink({ uri: 'uri' });
+const restLink = new RestLink({ uri: "uri" });
 
 const client = new ApolloClient({
   link: ApolloLink.from([authRestLink, restLink]),
@@ -398,18 +393,18 @@ If you are using multiple link types, `restLink` should go before `httpLink`, as
 For example:
 
 ```js
-const httpLink = createHttpLink({ uri: 'server.com/graphql' });
-const restLink = new RestLink({ uri: 'api.server.com' });
+const httpLink = createHttpLink({ uri: "server.com/graphql" });
+const restLink = new RestLink({ uri: "api.server.com" });
 
 const client = new ApolloClient({
   link: ApolloLink.from([authLink, restLink, errorLink, retryLink, httpLink]),
   // Note: httpLink is terminating so must be last, while retry & error wrap the links to their right
   //       state & context links should happen before (to the left of) restLink.
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache()
 });
 ```
 
-_Note: you should also consider this if you're using [`apollo-link-context`](#context) to set `Headers`, you need that link to be before `restLink` as well._
+ _Note: you should also consider this if you're using [`apollo-link-context`](#context) to set `Headers`, you need that link to be before `restLink` as well._
 
 <h2 id="rest">@rest directive</h2>
 
@@ -420,14 +415,14 @@ The rest directive could be used at any depth in a query, but once it is used, n
 
 An `@rest(…)` directive takes two required and several optional arguments:
 
-- `type: string`: The GraphQL type this will return
-- `path: string`: uri-path to the REST API. This could be a path or a full url. If a path, the endpoint given on link creation or from the context is concatenated with it to produce a full `URI`. See also: `pathBuilder`
-- _optional_ `method?: "GET" | "PUT" | "POST" | "DELETE"`: the HTTP method to send the request via (i.e GET, PUT, POST)
-- _optional_ `endpoint?: string` key to use when looking up the endpoint in the (optional) `endpoints` table if provided to RestLink at creation time.
-- _optional_ `pathBuilder?: /function/`: If provided, this function gets to control what path is produced for this request.
-- _optional_ `bodyKey?: string = "input"`: This is the name of the `variable` to use when looking to build a REST request-body for a `PUT` or `POST` request. It defaults to `input` if not supplied.
-- _optional_ `bodyBuilder?: /function/`: If provided, this is the name a `function` that you provided to `variables`, that is called when a request-body needs to be built. This lets you combine arguments or encode the body in some format other than JSON.
-- _optional_ `bodySerializer?: /string | function/`: string key to look up a function in `bodySerializers` or a custom serialization function for the body/headers of this request before it is passed ot the fetch call. Defaults to `JSON.stringify` and setting `Content-Type: application-json`.
+* `type: string`: The GraphQL type this will return
+* `path: string`: uri-path to the REST API. This could be a path or a full url. If a path, the endpoint given on link creation or from the context is concatenated with it to produce a full `URI`. See also: `pathBuilder`
+* _optional_ `method?: "GET" | "PUT" | "POST" | "DELETE"`: the HTTP method to send the request via (i.e GET, PUT, POST)
+* _optional_ `endpoint?: string` key to use when looking up the endpoint in the (optional) `endpoints` table if provided to RestLink at creation time.
+* _optional_ `pathBuilder?: /function/`: If provided, this function gets to control what path is produced for this request.
+* _optional_ `bodyKey?: string = "input"`: This is the name of the `variable` to use when looking to build a REST request-body for a `PUT` or `POST` request. It defaults to `input` if not supplied.
+* _optional_ `bodyBuilder?: /function/`: If provided, this is the name a `function` that you provided to `variables`, that is called when a request-body needs to be built. This lets you combine arguments or encode the body in some format other than JSON.
+* _optional_ `bodySerializer?: /string | function/`: string key to look up a function in `bodySerializers` or a custom serialization function for the body/headers of this request before it is passed ot the fetch call. Defaults to `JSON.stringify` and setting `Content-Type: application-json`.
 
 <h3 id="rest.arguments.variables">Variables</h3>
 
@@ -442,7 +437,7 @@ query postTitle {
 }
 ```
 
-_Warning_: Variables in the main path will not automatically have `encodeURIComponent` called on them
+*Warning*: Variables in the main path will not automatically have `encodeURIComponent` called on them
 
 Additionally, you can also control the query-string:
 
@@ -464,10 +459,10 @@ Things to note:
 
 The available variable sources are:
 
-- `args` these are the things passed directly to this field parameters. In the above example `postSearch` had `query` and `page_size` in args.
-- `exportVariables` these are the things in the parent context that were tagged as `@export(as: ...)`
-- `context` these are the apollo-context, so you can have globals set up via `apollo-link-context`
-- `@rest` these include any other parameters you pass to the `@rest()` directive. This is probably more useful when working with `pathBuilder`, documented below.
+* `args` these are the things passed directly to this field parameters. In the above example `postSearch` had `query` and `page_size` in args.
+* `exportVariables` these are the things in the parent context that were tagged as `@export(as: ...)`
+* `context` these are the apollo-context, so you can have globals set up via `apollo-link-context`
+* `@rest` these include any other parameters you pass to the `@rest()` directive. This is probably more useful when working with `pathBuilder`, documented below.
 
 <h4 id="rest.arguments.pathBuilder">`pathBuilder`</h4>
 
@@ -484,7 +479,9 @@ If you need/want to name it something different, you can pass `bodyKey`, and we'
 In this example the publish API accepts a body in the variable `body` instead of input:
 
 ```graphql
-mutation publishPost($someApiWithACustomBodyKey: PublishablePostInput!) {
+mutation publishPost(
+  $someApiWithACustomBodyKey: PublishablePostInput!
+) {
   publishedPost: publish(input: "Foo", body: $someApiWithACustomBodyKey)
     @rest(
       type: "Post"
@@ -505,7 +502,10 @@ mutation publishPost($someApiWithACustomBodyKey: PublishablePostInput!) {
 If you need to structure your data differently, or you need to custom encode your body (say as form-encoded), you can instead provide `bodyBuilder`
 
 ```graphql
-mutation encryptedPost($input: PublishablePostInput!, $encryptor: any) {
+mutation encryptedPost(
+  $input: PublishablePostInput!
+  $encryptor: any
+) {
   publishedPost: publish(input: $input)
     @rest(
       type: "Post"
@@ -528,20 +528,28 @@ If you need to serialize your data differently (say as form-encoded), you can pr
 `RestLink` will instead use the corresponding serializer from the `bodySerializers` object that can optionally be passed in during initialization.
 
 ```graphql
-mutation encryptedForm($input: PublishablePostInput!, $formSerializer: any) {
+mutation encryptedForm(
+  $input: PublishablePostInput!,
+  $formSerializer: any
+) {
   publishedPost: publish(input: $input)
     @rest(
-      type: "Post"
-      path: "/posts/new"
-      method: "POST"
+      type: "Post",
+      path: "/posts/new",
+      method: "POST",
       bodySerializer: $formSerializer
     ) {
-    id
-    title
-  }
+      id
+      title
+    }
 
   publishRSS(input: $input)
-    @rest(type: "Post", path: "/feed", method: "POST", bodySerializer: "xml")
+    @rest(
+      type: "Post",
+      path: "/feed",
+      method: "POST",
+      bodySerializer: "xml"
+    )
 }
 ```
 
@@ -558,30 +566,32 @@ const formSerializer = (data: any, headers: Headers) => {
 
   headers.set('Content-Type', 'application/x-www-form-urlencoded');
 
-  return { body: formData, headers };
-};
+  return {body: formData, headers};
+}
+
 ```
 
 And `"xml"` would have been defined on the `RestLink` directly
 
 ```typescript
 const restLink = new RestLink({
-  ...otherOptions,
-  bodySerializers: {
-    xml: xmlSerializer,
-  },
-});
+ ...otherOptions,
+ bodySerializers: {
+   xml: xmlSerializer
+ }
+})
 ```
+
 
 <h2 id="export">@export directive</h2>
 
 The export directive re-exposes a field for use in a later (nested) query. These are the same semantics that will be supported on the server, but when used in a `RestLink` you can use the exported variables for further calls (i.e. waterfall requests from nested fields)
 
-_Note: If you're constantly using @export you may prefer to take a look at [`apollo-server`](/docs/apollo-server/) which you can try out at [launchpad.graphql.com](https://launchpad.graphql.com/)_
+ _Note: If you're constantly using @export you may prefer to take a look at [`apollo-server`](/docs/apollo-server/) which you can try out at [launchpad.graphql.com](https://launchpad.graphql.com/)_
 
 <h3 id="export.arguments">Arguments</h3>
 
-- `as: string`: name to create this as a variable to be used down the selection set
+* `as: string`: name to create this as a variable to be used down the selection set
 
 <h3 id="export.example">Example</h3>
 
@@ -608,28 +618,28 @@ const QUERY = gql`
 You can write also mutations with the apollo-link-rest, for example:
 
 ```graphql
-mutation deletePost($id: ID!) {
-  deletePostResponse(id: $id)
-    @rest(type: "Post", path: "/posts/{args.id}", method: "DELETE") {
-    NoResponse
+  mutation deletePost($id: ID!) {
+    deletePostResponse(id: $id)
+      @rest(type: "Post", path: "/posts/{args.id}", method: "DELETE") {
+      NoResponse
+    }
   }
-}
 ```
 
 <h2 id="troubleshooting">Troubleshooting</h2>
 
 As you start using `apollo-link-rest` you may run into some standard issues that we thought we could help you solve.
 
-- `Missing field __typename in ...` -- If you see this, it's possible you haven't provided `type:` to the [`@rest(...)`](#rest)-directive. Alternately you need to set up a [`typePatcher`](#options.typePatcher)
-- `Headers is undefined` -- If you see something like this, you're running in a browser or other Javascript environment that does not yet support the full specification for the `Headers` API.
+* `Missing field __typename in ...` -- If you see this, it's possible you haven't provided `type:` to the [`@rest(...)`](#rest)-directive. Alternately you need to set up a [`typePatcher`](#options.typePatcher)
+* `Headers is undefined` -- If you see something like this, you're running in a browser or other Javascript environment that does not yet support the full specification for the `Headers` API.
 
 <h2 id="examples">Example apps</h2>
 
 To get you started, here are some example apps:
 
-- [Simple](https://github.com/apollographql/apollo-link-rest/tree/master/examples/simple):
+* [Simple](https://github.com/apollographql/apollo-link-rest/tree/master/examples/simple):
   A very simple app with a single query that reflect the setup section.
-- [Advanced](https://github.com/apollographql/apollo-link-rest/tree/master/examples/advanced):
+* [Advanced](https://github.com/apollographql/apollo-link-rest/tree/master/examples/advanced):
   A more complex app that demonstrate how to use an export directive.
 
 <h1 id="contributing">Contributing</h1>
