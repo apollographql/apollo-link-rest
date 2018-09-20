@@ -253,7 +253,60 @@ To make this work you should try to pick one strategy, and stick with it -- eith
 
 This is tracked in [Issue #112](https://github.com/apollographql/apollo-link-rest/issues/112)
 
-<h3 id=options.example>Complete options</h3>
+<h3 id="options.responseParser">Response parsing</h3>
+
+By default, Apollo expects an object at the root for record requests, and an array of objects at the root for a collection request. For example, if fetching a user by ID (`/users/1`), the following response is expected.
+
+```json
+{
+  "id": 1,
+  "name": "Apollo"
+}
+```
+
+And when fetching for a list of users (`/users`), the following response is expected.
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Apollo"
+  },
+  {
+    "id": 2,
+    "name": "Starman"
+  }
+]
+```
+
+If the structure of your API responses differs than what Apollo expects, you can define a `responseParser` in the client. This function receives the JSON response as the 1st argument, and the current `typeName` as the 2nd argument.
+
+```js
+const link = new RestLink({
+  uri: '/api',
+  responseParser: response => response.data,
+});
+```
+
+With the previously defined parser, the following response structure would be supported.
+
+```json
+{
+  "meta": {},
+  "data": [
+    {
+      "id": 1,
+      "name": "Apollo"
+    },
+    {
+      "id": 2,
+      "name": "Starman"
+    }
+  ]
+}
+```
+
+<h3 id="options.example">Complete options</h3>
 
 Here is one way you might customize `RestLink`:
 
