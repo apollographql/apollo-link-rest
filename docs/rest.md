@@ -305,6 +305,27 @@ With the previously defined parser, the following response structure would be su
 }
 ```
 
+<h3 id="options.responseParser.endpoints">Custom endpoint responses</h3>
+
+The client level `responseParser` applies for all responses, across all URIs and endpoints. If you need a custom `responseParser` per endpoint, you can define an object of options for that specific endpoint.
+
+```js
+const link = new RestLink({
+  endpoints: {
+    v1: {
+      uri: '/v1',
+      responseParser: response => response.data,
+    },
+    v2: {
+      uri: '/v2',
+      responseParser: (response, typeName) => response[typeName],
+    },
+  },
+});
+```
+
+> When using the object form, the `uri` field is required.
+
 <h3 id=options.example>Complete options</h3>
 
 Here is one way you might customize `RestLink`:

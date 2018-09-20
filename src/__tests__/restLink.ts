@@ -823,69 +823,151 @@ describe('Can customize/parse the response before passing to Apollo', () => {
     { title: 'Respect apollo', meta: { creatorId: 1 } },
   ];
 
-  it('handles single record responses', async () => {
-    fetchMock.get('/api/posts/1', {
-      meta: {},
-      post: posts[1],
-    });
+  describe('with root level `responseParser`', () => {
+    it('handles single record responses', async () => {
+      fetchMock.get('/api/posts/1', {
+        meta: {},
+        post: posts[1],
+      });
 
-    const link = new RestLink({
-      uri: '/api',
-      responseParser: (data, type) => {
-        expect(type).toBe('Post');
+      const link = new RestLink({
+        uri: '/api',
+        responseParser: (data, type) => {
+          expect(type).toBe('Post');
 
-        return data.post;
-      },
-    });
-    const restQuery = gql`
-      query {
-        post @rest(type: "Post", path: "/posts/1") {
-          title
-          meta
+          return data.post;
+        },
+      });
+      const restQuery = gql`
+        query {
+          post @rest(type: "Post", path: "/posts/1") {
+            title
+            meta
+          }
         }
-      }
-    `;
-    const { data: restData } = await makePromise<Result>(
-      execute(link, { operationName: 'restQuery', query: restQuery }),
-    );
-    expect(restData).toEqual({
-      post: {
-        title: 'Respect apollo',
-        meta: { creatorId: 1 },
-        __typename: 'Post',
-      },
+      `;
+      const { data: restData } = await makePromise<Result>(
+        execute(link, { operationName: 'restQuery', query: restQuery }),
+      );
+      expect(restData).toEqual({
+        post: {
+          title: 'Respect apollo',
+          meta: { creatorId: 1 },
+          __typename: 'Post',
+        },
+      });
+    });
+
+    it('handles multiple record responses', async () => {
+      fetchMock.get('/api/posts', {
+        meta: {},
+        posts,
+      });
+
+      const link = new RestLink({
+        uri: '/api',
+        responseParser: (data, type) => {
+          expect(type).toBe('[Post]');
+
+          return data.posts;
+        },
+      });
+      const restQuery = gql`
+        query {
+          posts @rest(type: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+      const { data: restData } = await makePromise<Result>(
+        execute(link, { operationName: 'restQuery', query: restQuery }),
+      );
+      expect(restData).toEqual({
+        posts: [
+          { title: 'Love apollo', __typename: 'Post' },
+          { title: 'Respect apollo', __typename: 'Post' },
+        ],
+      });
     });
   });
 
-  it('handles multiple record responses', async () => {
-    fetchMock.get('/api/posts', {
-      meta: {},
-      posts,
-    });
+  describe('with endpoint level `responseParser`', () => {
+    it('handles single record responses', async () => {
+      fetchMock.get('/api/v1/posts/1', {
+        meta: {},
+        post: posts[1],
+      });
 
-    const link = new RestLink({
-      uri: '/api',
-      responseParser: (data, type) => {
-        expect(type).toBe('[Post]');
+      const link = new RestLink({
+        // This is purpsefully wrong so that we verify the endpoint one is called
+        responseParser: data => data.record,
+        endpoints: {
+          v1: {
+            uri: '/api/v1',
+            responseParser: (data, type) => {
+              expect(type).toBe('Post');
 
-        return data.posts;
-      },
-    });
-    const restQuery = gql`
-      query {
-        posts @rest(type: "[Post]", path: "/posts") {
-          title
+              return data.post;
+            },
+          },
+        },
+      });
+      const restQuery = gql`
+        query {
+          post @rest(type: "Post", path: "/posts/1", endpoint: "v1") {
+            title
+            meta
+          }
         }
-      }
-    `;
-    const { data: restData } = await makePromise<Result>(
-      execute(link, { operationName: 'restQuery', query: restQuery }),
-    );
-    expect(restData).toEqual({
-      posts: [
-        { title: 'Love apollo', __typename: 'Post' },
-        { title: 'Respect apollo', __typename: 'Post' },
-      ],
+      `;
+      const { data: restData } = await makePromise<Result>(
+        execute(link, { operationName: 'restQuery', query: restQuery }),
+      );
+      expect(restData).toEqual({
+        post: {
+          title: 'Respect apollo',
+          meta: { creatorId: 1 },
+          __typename: 'Post',
+        },
+      });
+    });
+
+    it('handles multiple record responses', async () => {
+      fetchMock.get('/api/v1/posts', {
+        meta: {},
+        posts,
+      });
+
+      const link = new RestLink({
+        // This is purpsefully wrong so that we verify the endpoint one is called
+        responseParser: data => data.collection,
+        endpoints: {
+          v1: {
+            uri: '/api/v1',
+            responseParser: (data, type) => {
+              expect(type).toBe('[Post]');
+
+              return data.posts;
+            },
+          },
+        },
+      });
+      const restQuery = gql`
+        query {
+          posts @rest(type: "[Post]", path: "/posts", endpoint: "v1") {
+            title
+          }
+        }
+      `;
+      const { data: restData } = await makePromise<Result>(
+        execute(link, { operationName: 'restQuery', query: restQuery }),
+      );
+      expect(restData).toEqual({
+        posts: [
+          { title: 'Love apollo', __typename: 'Post' },
+          { title: 'Respect apollo', __typename: 'Post' },
+        ],
+      });
     });
   });
 });

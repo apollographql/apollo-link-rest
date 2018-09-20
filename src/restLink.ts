@@ -36,8 +36,14 @@ export namespace RestLink {
   export type URI = string;
 
   export type Endpoint = string;
+
+  export interface EndpointOptions {
+    uri: Endpoint;
+    responseParser?: ResponseParser | null;
+  }
+
   export interface Endpoints {
-    [endpointKey: string]: Endpoint;
+    [endpointKey: string]: Endpoint | EndpointOptions;
   }
 
   export type Header = string;
@@ -449,14 +455,22 @@ function insertNullsForAnyOmittedFields(
   });
 }
 
-const getURIFromEndpoints = (
+const getEndpointOptions = (
   endpoints: RestLink.Endpoints,
   endpoint: RestLink.Endpoint,
-): RestLink.URI => {
-  return (
+): RestLink.EndpointOptions => {
+  const result =
     endpoints[endpoint || DEFAULT_ENDPOINT_KEY] ||
-    endpoints[DEFAULT_ENDPOINT_KEY]
-  );
+    endpoints[DEFAULT_ENDPOINT_KEY];
+
+  if (typeof result === 'string') {
+    return { uri: result };
+  }
+
+  return {
+    responseParser: null,
+    ...result,
+  };
 };
 
 /** Replaces params in the path, keyed by colons */
@@ -862,7 +876,7 @@ const resolver: Resolver = async (
     endpoint,
     pathBuilder,
   } = directives.rest as RestLink.DirectiveOptions;
-  const uri = getURIFromEndpoints(endpoints, endpoint);
+  const endpointOption = getEndpointOptions(endpoints, endpoint);
   try {
     const neitherPathsProvided = path == null && pathBuilder == null;
 
@@ -977,15 +991,18 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-    return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
-      method,
-      headers: overrideHeaders || headers,
-      body: body,
+    return await (customFetch || fetch)(
+      `${endpointOption.uri}${pathWithParams}`,
+      {
+        method,
+        headers: overrideHeaders || headers,
+        body: body,
 
-      // Only set credentials if they're non-null as some browsers throw an exception:
-      // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
-      ...(credentials ? { credentials } : {}),
-    })
+        // Only set credentials if they're non-null as some browsers throw an exception:
+        // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
+        ...(credentials ? { credentials } : {}),
+      },
+    )
       .then(async res => {
         context.responses.push(res);
 
@@ -1022,10 +1039,17 @@ const resolver: Resolver = async (
           `Response not successful: Received status code ${res.status}`,
         );
       })
-      .then(
-        result =>
-          responseParser == null ? result : responseParser(result, type),
-      )
+      .then(result => {
+        if (endpointOption.responseParser) {
+          return endpointOption.responseParser(result, type);
+        }
+
+        if (responseParser) {
+          return responseParser(result, type);
+        }
+
+        return result;
+      })
       .then(
         result =>
           fieldNameNormalizer == null
