@@ -823,7 +823,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
     { title: 'Respect apollo', meta: { creatorId: 1 } },
   ];
 
-  describe('with root level `responseParser`', () => {
+  describe('with root level `responseTransformer`', () => {
     it('handles single record responses', async () => {
       fetchMock.get('/api/posts/1', {
         meta: {},
@@ -832,7 +832,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         uri: '/api',
-        responseParser: (data, type) => {
+        responseTransformer: (data, type) => {
           expect(type).toBe('Post');
 
           return data.post;
@@ -866,7 +866,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         uri: '/api',
-        responseParser: (data, type) => {
+        responseTransformer: (data, type) => {
           expect(type).toBe('[Post]');
 
           return data.posts;
@@ -891,7 +891,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
     });
   });
 
-  describe('with endpoint level `responseParser`', () => {
+  describe('with endpoint level `responseTransformer`', () => {
     it('handles single record responses', async () => {
       fetchMock.get('/api/v1/posts/1', {
         meta: {},
@@ -900,11 +900,11 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         // This is purpsefully wrong so that we verify the endpoint one is called
-        responseParser: data => data.record,
+        responseTransformer: data => data.record,
         endpoints: {
           v1: {
             uri: '/api/v1',
-            responseParser: (data, type) => {
+            responseTransformer: (data, type) => {
               expect(type).toBe('Post');
 
               return data.post;
@@ -940,11 +940,11 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         // This is purpsefully wrong so that we verify the endpoint one is called
-        responseParser: data => data.collection,
+        responseTransformer: data => data.collection,
         endpoints: {
           v1: {
             uri: '/api/v1',
-            responseParser: (data, type) => {
+            responseTransformer: (data, type) => {
               expect(type).toBe('[Post]');
 
               return data.posts;

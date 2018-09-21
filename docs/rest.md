@@ -92,7 +92,7 @@ Construction of `RestLink` takes an options object to customize the behavior of 
 * `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
 * `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. The function will also be passed the current `Header` set, which can be updated before the request is sent to `fetch`. Default method uses `JSON.stringify` and sets the `Content-Type` to `application/json`.
 * `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
-- `responseParser?: /function/`: _optional_ Apollo expects a record response to return a root object, and a collection of records response to return an array of objects. Use this function to structure the response into the format Apollo expects if your response data is structured differently.
+- `responseTransformer?: /function/`: _optional_ Apollo expects a record response to return a root object, and a collection of records response to return an array of objects. Use this function to structure the response into the format Apollo expects if your response data is structured differently.
 
 
 <h3 id="options.endpoints">Multiple endpoints</h3>
@@ -252,7 +252,7 @@ To make this work you should try to pick one strategy, and stick with it -- eith
 
 This is tracked in [Issue #112](https://github.com/apollographql/apollo-link-rest/issues/112)
 
-<h3 id="options.responseParser">Response parsing</h3>
+<h3 id="options.responseTransformer">Response parsing</h3>
 
 By default, Apollo expects an object at the root for record requests, and an array of objects at the root for a collection request. For example, if fetching a user by ID (`/users/1`), the following response is expected.
 
@@ -278,12 +278,12 @@ And when fetching for a list of users (`/users`), the following response is expe
 ]
 ```
 
-If the structure of your API responses differs than what Apollo expects, you can define a `responseParser` in the client. This function receives the JSON response as the 1st argument, and the current `typeName` as the 2nd argument.
+If the structure of your API responses differs than what Apollo expects, you can define a `responseTransformer` in the client. This function receives the JSON response as the 1st argument, and the current `typeName` as the 2nd argument.
 
 ```js
 const link = new RestLink({
   uri: '/api',
-  responseParser: response => response.data,
+  responseTransformer: response => response.data,
 });
 ```
 
@@ -305,20 +305,20 @@ With the previously defined parser, the following response structure would be su
 }
 ```
 
-<h3 id="options.responseParser.endpoints">Custom endpoint responses</h3>
+<h3 id="options.responseTransformer.endpoints">Custom endpoint responses</h3>
 
-The client level `responseParser` applies for all responses, across all URIs and endpoints. If you need a custom `responseParser` per endpoint, you can define an object of options for that specific endpoint.
+The client level `responseTransformer` applies for all responses, across all URIs and endpoints. If you need a custom `responseTransformer` per endpoint, you can define an object of options for that specific endpoint.
 
 ```js
 const link = new RestLink({
   endpoints: {
     v1: {
       uri: '/v1',
-      responseParser: response => response.data,
+      responseTransformer: response => response.data,
     },
     v2: {
       uri: '/v2',
-      responseParser: (response, typeName) => response[typeName],
+      responseTransformer: (response, typeName) => response[typeName],
     },
   },
 });

@@ -39,7 +39,7 @@ export namespace RestLink {
 
   export interface EndpointOptions {
     uri: Endpoint;
-    responseParser?: ResponseParser | null;
+    responseTransformer?: ResponseTransformer | null;
   }
 
   export interface Endpoints {
@@ -85,7 +85,7 @@ export namespace RestLink {
     init: RequestInit,
   ) => Promise<Response>;
 
-  export type ResponseParser = (data: any, typeName: string) => any;
+  export type ResponseTransformer = (data: any, typeName: string) => any;
 
   export interface RestLinkHelperProps {
     /** Arguments passed in via normal graphql parameters */
@@ -186,7 +186,7 @@ export namespace RestLink {
     /**
      * Parse the response body of an HTTP request into the format that Apollo expects.
      */
-    responseParser?: ResponseParser;
+    responseTransformer?: ResponseTransformer;
   };
 
   /** @rest(...) Directive Options */
@@ -468,7 +468,7 @@ const getEndpointOptions = (
   }
 
   return {
-    responseParser: null,
+    responseTransformer: null,
     ...result,
   };
 };
@@ -793,7 +793,7 @@ interface RequestContext {
   fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
   serializers: RestLink.Serializers;
-  responseParser: RestLink.ResponseParser;
+  responseTransformer: RestLink.ResponseTransformer;
 
   /** An array of the responses from each fetched URL */
   responses: Response[];
@@ -866,7 +866,7 @@ const resolver: Resolver = async (
     fieldNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
-    responseParser,
+    responseTransformer,
   } = context;
 
   const fragmentMap = createFragmentMap(fragmentDefinitions);
@@ -1040,12 +1040,12 @@ const resolver: Resolver = async (
         );
       })
       .then(result => {
-        if (endpointOption.responseParser) {
-          return endpointOption.responseParser(result, type);
+        if (endpointOption.responseTransformer) {
+          return endpointOption.responseTransformer(result, type);
         }
 
-        if (responseParser) {
-          return responseParser(result, type);
+        if (responseTransformer) {
+          return responseTransformer(result, type);
         }
 
         return result;
@@ -1104,7 +1104,7 @@ export class RestLink extends ApolloLink {
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
   private serializers: RestLink.Serializers;
-  private responseParser: RestLink.ResponseParser;
+  private responseTransformer: RestLink.ResponseTransformer;
 
   constructor({
     uri,
@@ -1117,7 +1117,7 @@ export class RestLink extends ApolloLink {
     credentials,
     bodySerializers,
     defaultSerializer,
-    responseParser,
+    responseTransformer,
   }: RestLink.Options) {
     super();
     const fallback = {};
@@ -1191,7 +1191,7 @@ export class RestLink extends ApolloLink {
       );
     }
 
-    this.responseParser = responseParser || null;
+    this.responseTransformer = responseTransformer || null;
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.fieldNameDenormalizer = fieldNameDenormalizer || null;
     this.headers = normalizeHeaders(headers);
@@ -1266,7 +1266,7 @@ export class RestLink extends ApolloLink {
       typePatcher: this.typePatcher,
       serializers: this.serializers,
       responses: [],
-      responseParser: this.responseParser,
+      responseTransformer: this.responseTransformer,
     };
     const resolverOptions = {};
     let obs;
