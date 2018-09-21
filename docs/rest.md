@@ -252,9 +252,9 @@ To make this work you should try to pick one strategy, and stick with it -- eith
 
 This is tracked in [Issue #112](https://github.com/apollographql/apollo-link-rest/issues/112)
 
-<h3 id="options.responseTransformer">Response parsing</h3>
+<h3 id="options.responseTransformer">Response transforming</h3>
 
-By default, Apollo expects an object at the root for record requests, and an array of objects at the root for a collection request. For example, if fetching a user by ID (`/users/1`), the following response is expected.
+By default, Apollo expects an object at the root for record requests, and an array of objects at the root for collection requests. For example, if fetching a user by ID (`/users/1`), the following response is expected.
 
 ```json
 {
@@ -287,7 +287,7 @@ const link = new RestLink({
 });
 ```
 
-With the previously defined parser, the following response structure would be supported.
+With the previously defined transformer, the following response structure would be supported.
 
 ```json
 {
