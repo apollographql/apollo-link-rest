@@ -980,14 +980,15 @@ const resolver: Resolver = async (
       .then(async res => {
         context.responses.push(res);
 
-        // HTTP-204 means "no-content", similarly Content-Length implies the same
-        // This commonly occurs when you POST/PUT to the server, and it acknowledges
-        // success, but doesn't return your Resource.
-        if (res.status === 204 || res.headers.get('Content-Length') === '0') {
-          return Promise.resolve({});
-        }
         // All other success responses
         if (res.status < 300) {
+          // HTTP-204 means "no-content", similarly Content-Length implies the same
+          // This commonly occurs when you POST/PUT to the server, and it acknowledges
+          // success, but doesn't return your Resource.
+          if (res.status === 204 || res.headers.get('Content-Length') === '0') {
+            return Promise.resolve({});
+          }
+
           return res.json();
         }
 
