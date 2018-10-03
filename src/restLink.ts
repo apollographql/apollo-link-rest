@@ -36,8 +36,14 @@ export namespace RestLink {
   export type URI = string;
 
   export type Endpoint = string;
+
+  export interface EndpointOptions {
+    uri: Endpoint;
+    responseTransformer?: ResponseTransformer | null;
+  }
+
   export interface Endpoints {
-    [endpointKey: string]: Endpoint;
+    [endpointKey: string]: Endpoint | EndpointOptions;
   }
 
   export type Header = string;
@@ -78,6 +84,8 @@ export namespace RestLink {
     request: RequestInfo,
     init: RequestInit,
   ) => Promise<Response>;
+
+  export type ResponseTransformer = (data: any, typeName: string) => any;
 
   export interface RestLinkHelperProps {
     /** Arguments passed in via normal graphql parameters */
@@ -174,6 +182,11 @@ export namespace RestLink {
      * @default JSON serialization
      */
     defaultSerializer?: Serializer;
+
+    /**
+     * Parse the response body of an HTTP request into the format that Apollo expects.
+     */
+    responseTransformer?: ResponseTransformer;
   };
 
   /** @rest(...) Directive Options */
@@ -442,14 +455,22 @@ function insertNullsForAnyOmittedFields(
   });
 }
 
-const getURIFromEndpoints = (
+const getEndpointOptions = (
   endpoints: RestLink.Endpoints,
   endpoint: RestLink.Endpoint,
-): RestLink.URI => {
-  return (
+): RestLink.EndpointOptions => {
+  const result =
     endpoints[endpoint || DEFAULT_ENDPOINT_KEY] ||
-    endpoints[DEFAULT_ENDPOINT_KEY]
-  );
+    endpoints[DEFAULT_ENDPOINT_KEY];
+
+  if (typeof result === 'string') {
+    return { uri: result };
+  }
+
+  return {
+    responseTransformer: null,
+    ...result,
+  };
 };
 
 /** Replaces params in the path, keyed by colons */
@@ -772,6 +793,7 @@ interface RequestContext {
   fragmentDefinitions: FragmentDefinitionNode[];
   typePatcher: RestLink.FunctionalTypePatcher;
   serializers: RestLink.Serializers;
+  responseTransformer: RestLink.ResponseTransformer;
 
   /** An array of the responses from each fetched URL */
   responses: Response[];
@@ -844,6 +866,7 @@ const resolver: Resolver = async (
     fieldNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
+    responseTransformer,
   } = context;
 
   const fragmentMap = createFragmentMap(fragmentDefinitions);
@@ -853,7 +876,7 @@ const resolver: Resolver = async (
     endpoint,
     pathBuilder,
   } = directives.rest as RestLink.DirectiveOptions;
-  const uri = getURIFromEndpoints(endpoints, endpoint);
+  const endpointOption = getEndpointOptions(endpoints, endpoint);
   try {
     const neitherPathsProvided = path == null && pathBuilder == null;
 
@@ -968,15 +991,18 @@ const resolver: Resolver = async (
     }
 
     validateRequestMethodForOperationType(method, operationType || 'query');
-    return await (customFetch || fetch)(`${uri}${pathWithParams}`, {
-      method,
-      headers: overrideHeaders || headers,
-      body: body,
+    return await (customFetch || fetch)(
+      `${endpointOption.uri}${pathWithParams}`,
+      {
+        method,
+        headers: overrideHeaders || headers,
+        body: body,
 
-      // Only set credentials if they're non-null as some browsers throw an exception:
-      // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
-      ...(credentials ? { credentials } : {}),
-    })
+        // Only set credentials if they're non-null as some browsers throw an exception:
+        // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
+        ...(credentials ? { credentials } : {}),
+      },
+    )
       .then(async res => {
         context.responses.push(res);
 
@@ -1013,6 +1039,17 @@ const resolver: Resolver = async (
           parsed,
           `Response not successful: Received status code ${res.status}`,
         );
+      })
+      .then(result => {
+        if (endpointOption.responseTransformer) {
+          return endpointOption.responseTransformer(result, type);
+        }
+
+        if (responseTransformer) {
+          return responseTransformer(result, type);
+        }
+
+        return result;
       })
       .then(
         result =>
@@ -1068,6 +1105,7 @@ export class RestLink extends ApolloLink {
   private credentials: RequestCredentials;
   private customFetch: RestLink.CustomFetch;
   private serializers: RestLink.Serializers;
+  private responseTransformer: RestLink.ResponseTransformer;
 
   constructor({
     uri,
@@ -1080,6 +1118,7 @@ export class RestLink extends ApolloLink {
     credentials,
     bodySerializers,
     defaultSerializer,
+    responseTransformer,
   }: RestLink.Options) {
     super();
     const fallback = {};
@@ -1153,6 +1192,7 @@ export class RestLink extends ApolloLink {
       );
     }
 
+    this.responseTransformer = responseTransformer || null;
     this.fieldNameNormalizer = fieldNameNormalizer || null;
     this.fieldNameDenormalizer = fieldNameDenormalizer || null;
     this.headers = normalizeHeaders(headers);
@@ -1227,6 +1267,7 @@ export class RestLink extends ApolloLink {
       typePatcher: this.typePatcher,
       serializers: this.serializers,
       responses: [],
+      responseTransformer: this.responseTransformer,
     };
     const resolverOptions = {};
     let obs;
