@@ -1225,6 +1225,73 @@ describe('Query single call', () => {
       post: { ...postWithNest, __typename: 'Post' },
     });
   });
+
+  it('returns an empty object on 204 status', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    fetchMock.get('/api/no-content', {
+      headers: { 'Content-Length': 0 },
+      status: 204,
+      body: { hasNoContent: true },
+    });
+
+    const queryWithNoContent = gql`
+      query noContent {
+        noContentResponse @rest(type: "NoContent", path: "/no-content") {
+          hasNoContent
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'noContent',
+        query: queryWithNoContent,
+      }),
+    );
+
+    expect(data).toMatchObject({
+      noContentResponse: {
+        __typename: 'NoContent',
+        hasNoContent: null,
+      },
+    });
+  });
+
+  it('returns an error on unsuccessful gets with zero Content-Length', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    fetchMock.get('/api/no-content', {
+      headers: { 'Content-Length': 0 },
+      status: 400,
+      body: { hasNoContent: true },
+    });
+
+    const errorWithNoContent = gql`
+      query noContent {
+        noContentResponse @rest(type: "NoContent", path: "/no-content") {
+          hasNoContent
+        }
+      }
+    `;
+
+    try {
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'noContent',
+          query: errorWithNoContent,
+        }),
+      );
+    } catch (e) {
+      expect(e).toEqual(
+        new Error('Response not successful: Received status code 400'),
+      );
+    }
+  });
 });
 
 describe('Use a custom pathBuilder', () => {
@@ -2262,6 +2329,7 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
+
     it('returns an empty object on 204 status', async () => {
       // In truth this test is just for show, because the fetch implementation
       // used in the tests already returns {} from res.json() for 204 responses
@@ -2302,14 +2370,15 @@ describe('Mutation', () => {
         title: null,
       });
     });
-    it('returns an empty object on zero Content-Length', async () => {
+
+    it('returns an empty object on successful posts with zero Content-Length', async () => {
       // In Node.js parsing an empty body doesn't throw an error, so the best test is
       // to provide body data and ensure the zero length still triggers the empty response
       expect.assertions(1);
 
       const link = new RestLink({ uri: '/api' });
-
       const post = { id: '1', title: 'Love apollo' };
+
       fetchMock.post('/api/posts', {
         headers: { 'Content-Length': 0 },
         body: post,
@@ -2328,6 +2397,7 @@ describe('Mutation', () => {
           }
         }
       `;
+
       const response = await makePromise<Result>(
         execute(link, {
           operationName: 'publishPost',
@@ -2341,6 +2411,44 @@ describe('Mutation', () => {
         id: null,
         title: null,
       });
+    });
+
+    it('returns an error on unsuccessful posts with zero Content-Length', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      fetchMock.post('/api/posts', {
+        headers: { 'Content-Length': 0 },
+        status: 400,
+      });
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          title: String
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts", method: "POST") {
+            title
+          }
+        }
+      `;
+
+      try {
+        await makePromise<Result>(
+          execute(link, {
+            operationName: 'publishPost',
+            query: createPostMutation,
+            variables: { input: { title: null } },
+          }),
+        );
+      } catch (e) {
+        expect(e).toEqual(
+          new Error('Response not successful: Received status code 400'),
+        );
+      }
     });
   });
 
