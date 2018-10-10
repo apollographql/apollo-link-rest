@@ -1,4 +1,5 @@
 module.exports = {
+  roots: ['<rootDir>/src'],
   globals: {
     'ts-jest': {
       babelConfig: false,
