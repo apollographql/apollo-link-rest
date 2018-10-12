@@ -19,7 +19,7 @@
     "build:browser": "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i apollo-link --i graphql --i apollo-utilities && npm run minify:browser",
     "build": "tsc -p .",
     "bundle": "rollup -c",
-    "clean": "rimraf lib/* && rimraf coverage/*",
+    "clean": "rimraf lib/* coverage/*",
     "coverage:upload": "codecov",
     "danger": "danger run --verbose",
     "deploy": "./scripts/deploy.sh",
@@ -27,7 +27,7 @@
     "docs:pull": "./scripts/docs_pull.sh",
     "docs:push": "./scripts/docs_push.sh",
     "filesize": "npm run build && npm run build:browser && bundlesize",
-    "lint": "prettier --trailing-comma all --single-quote --write \"src/**/*.{j,t}s*\"",
+    "lint": "prettier --write 'src/**/*.{j,t}s*'",
     "lint-staged": "lint-staged",
     "minify:browser": "uglifyjs -c -m -o ./lib/bundle.min.js -- ./lib/bundle.js",
     "postbuild": "npm run bundle",
@@ -91,16 +91,16 @@
     {
       "name": "apollo-link-rest",
       "path": "./lib/bundle.min.js",
-      "maxSize": "5 kb"
+      "maxSize": "9 kb"
     }
   ],
   "lint-staged": {
     "*.ts*": [
-      "prettier --trailing-comma all --single-quote --write",
+      "prettier --write",
       "git add"
     ],
     "*.js*": [
-      "prettier --trailing-comma all --single-quote --write",
+      "prettier --write",
       "git add"
     ],
     "*.json*": [
