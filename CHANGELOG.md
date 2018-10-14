@@ -4,6 +4,14 @@
 
 ### v0.next
 
+### v0.6.0
+
+* Feature: responseTransformers allow you to restructure & erase "wrapper" objects from your responses. [#146](https://github.com/apollographql/apollo-link-rest/pull/146)
+* Tweaks to config for prettier [#153](https://github.com/apollographql/apollo-link-rest/pull/153) & jest [#158](https://github.com/apollographql/apollo-link-rest/pull/158)
+* Tests for No-Content responses [#157](https://github.com/apollographql/apollo-link-rest/pull/157) & [#161](https://github.com/apollographql/apollo-link-rest/pull/161)
+* Bundle Size-Limit Increased [#162](https://github.com/apollographql/apollo-link-rest/pull/162)
+* Restructure Code for preferring `await` over Promise-chains [#159](https://github.com/apollographql/apollo-link-rest/pull/159)
+
 ### v0.5.0
 
 * Breaking Change: 404s now no longer throw an error! It's just null data! [#142](https://github.com/apollographql/apollo-link-rest/pull/142)
