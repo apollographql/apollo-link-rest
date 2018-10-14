@@ -876,200 +876,191 @@ const resolver: Resolver = async (
     endpoint,
     pathBuilder,
   } = directives.rest as RestLink.DirectiveOptions;
+
   const endpointOption = getEndpointOptions(endpoints, endpoint);
-  try {
-    const neitherPathsProvided = path == null && pathBuilder == null;
+  const neitherPathsProvided = path == null && pathBuilder == null;
 
-    if (neitherPathsProvided) {
-      throw new Error(
-        `One of ("path" | "pathBuilder") must be set in the @rest() directive. This request had neither, please add one`,
-      );
-    }
-    if (!pathBuilder) {
-      if (!path.includes(':')) {
-        // Colons are the legacy route, and aren't uri encoded anyhow.
-        pathBuilder = PathBuilder.replacerForPath(path);
-      } else {
-        console.warn(
-          "Deprecated: '@rest(path:' contains a ':' colon, this format will be removed in future versions",
-        );
-
-        pathBuilder = ({
-          args,
-          exportVariables,
-        }: RestLink.PathBuilderProps): string => {
-          const legacyArgs = {
-            ...args,
-            ...exportVariables,
-          };
-          const pathWithParams = Object.keys(legacyArgs).reduce(
-            (acc, e) => replaceLegacyParam(acc, e, legacyArgs[e]),
-            path,
-          );
-          if (pathWithParams.includes(':')) {
-            throw new Error(
-              'Missing parameters to run query, specify it in the query params or use ' +
-                'an export directive. (If you need to use ":" inside a variable string' +
-                ' make sure to encode the variables properly using `encodeURIComponent' +
-                '`. Alternatively see documentation about using pathBuilder.)',
-            );
-          }
-          return pathWithParams;
-        };
-      }
-    }
-    const allParams: RestLink.PathBuilderProps = {
-      args,
-      exportVariables,
-      context,
-      '@rest': directives.rest,
-      replacer: pathBuilder,
-    };
-    const pathWithParams = pathBuilder(allParams);
-
-    let {
-      method,
-      type,
-      bodyBuilder,
-      bodyKey,
-      fieldNameDenormalizer: perRequestNameDenormalizer,
-      bodySerializer,
-    } = directives.rest as RestLink.DirectiveOptions;
-    if (!method) {
-      method = 'GET';
-    }
-
-    let body = undefined;
-    let overrideHeaders: Headers = undefined;
-    if (
-      -1 === ['GET', 'DELETE'].indexOf(method) &&
-      operationType === 'mutation'
-    ) {
-      // Prepare our body!
-      if (!bodyBuilder) {
-        // By convention GraphQL recommends mutations having a single argument named "input"
-        // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
-
-        const maybeBody =
-          allParams.exportVariables[bodyKey || 'input'] ||
-          allParams.args[bodyKey || 'input'];
-        if (!maybeBody) {
-          throw new Error(
-            '[GraphQL mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
-          );
-        }
-
-        bodyBuilder = (argsWithExport: object) => {
-          return maybeBody;
-        };
-      }
-      body = convertObjectKeys(
-        bodyBuilder(allParams),
-        perRequestNameDenormalizer ||
-          linkLevelNameDenormalizer ||
-          noOpNameNormalizer,
-      );
-
-      let serializedBody: RestLink.SerializedBody;
-
-      if (typeof bodySerializer === 'string') {
-        if (!serializers.hasOwnProperty(bodySerializer)) {
-          throw new Error(
-            '"bodySerializer" must correspond to configured serializer. ' +
-              `Please make sure to specify a serializer called ${bodySerializer} in the "bodySerializers" property of the RestLink.`,
-          );
-        }
-        serializedBody = serializers[bodySerializer](body, headers);
-      } else {
-        serializedBody = bodySerializer
-          ? bodySerializer(body, headers)
-          : serializers[DEFAULT_SERIALIZER_KEY](body, headers);
-      }
-
-      body = serializedBody.body;
-      overrideHeaders = new Headers(serializedBody.headers);
-    }
-
-    validateRequestMethodForOperationType(method, operationType || 'query');
-    return await (customFetch || fetch)(
-      `${endpointOption.uri}${pathWithParams}`,
-      {
-        method,
-        headers: overrideHeaders || headers,
-        body: body,
-
-        // Only set credentials if they're non-null as some browsers throw an exception:
-        // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
-        ...(credentials ? { credentials } : {}),
-      },
-    )
-      .then(async res => {
-        context.responses.push(res);
-
-        // All other success responses
-        if (res.status < 300) {
-          // HTTP-204 means "no-content", similarly Content-Length implies the same
-          // This commonly occurs when you POST/PUT to the server, and it acknowledges
-          // success, but doesn't return your Resource.
-          if (res.status === 204 || res.headers.get('Content-Length') === '0') {
-            return Promise.resolve({});
-          }
-
-          return res.json();
-        }
-
-        // In a GraphQL context a missing resource should be indicated by
-        // a null value rather than throwing a network error
-        if (res.status === 404) {
-          return Promise.resolve(null);
-        }
-        // Default error handling:
-        // Throw a JSError, that will be available under the
-        // "Network error" category in apollo-link-error
-        let parsed: any;
-        // responses need to be cloned as they can only be read once
-        try {
-          parsed = await res.clone().json();
-        } catch (error) {
-          // its not json
-          parsed = await res.clone().text();
-        }
-        rethrowServerSideError(
-          res,
-          parsed,
-          `Response not successful: Received status code ${res.status}`,
-        );
-      })
-      .then(result => {
-        if (endpointOption.responseTransformer) {
-          return endpointOption.responseTransformer(result, type);
-        }
-
-        if (responseTransformer) {
-          return responseTransformer(result, type);
-        }
-
-        return result;
-      })
-      .then(
-        result =>
-          fieldNameNormalizer == null
-            ? result
-            : convertObjectKeys(result, fieldNameNormalizer),
-      )
-      .then(result =>
-        findRestDirectivesThenInsertNullsForOmittedFields(
-          resultKey,
-          result,
-          mainDefinition,
-          fragmentMap,
-          mainDefinition.selectionSet,
-        ),
-      )
-      .then(result => addTypeNameToResult(result, type, typePatcher));
-  } catch (error) {
-    throw error;
+  if (neitherPathsProvided) {
+    throw new Error(
+      `One of ("path" | "pathBuilder") must be set in the @rest() directive. This request had neither, please add one`,
+    );
   }
+  if (!pathBuilder) {
+    if (!path.includes(':')) {
+      // Colons are the legacy route, and aren't uri encoded anyhow.
+      pathBuilder = PathBuilder.replacerForPath(path);
+    } else {
+      console.warn(
+        "Deprecated: '@rest(path:' contains a ':' colon, this format will be removed in future versions",
+      );
+
+      pathBuilder = ({
+        args,
+        exportVariables,
+      }: RestLink.PathBuilderProps): string => {
+        const legacyArgs = {
+          ...args,
+          ...exportVariables,
+        };
+        const pathWithParams = Object.keys(legacyArgs).reduce(
+          (acc, e) => replaceLegacyParam(acc, e, legacyArgs[e]),
+          path,
+        );
+        if (pathWithParams.includes(':')) {
+          throw new Error(
+            'Missing parameters to run query, specify it in the query params or use ' +
+              'an export directive. (If you need to use ":" inside a variable string' +
+              ' make sure to encode the variables properly using `encodeURIComponent' +
+              '`. Alternatively see documentation about using pathBuilder.)',
+          );
+        }
+        return pathWithParams;
+      };
+    }
+  }
+  const allParams: RestLink.PathBuilderProps = {
+    args,
+    exportVariables,
+    context,
+    '@rest': directives.rest,
+    replacer: pathBuilder,
+  };
+  const pathWithParams = pathBuilder(allParams);
+
+  let {
+    method,
+    type,
+    bodyBuilder,
+    bodyKey,
+    fieldNameDenormalizer: perRequestNameDenormalizer,
+    bodySerializer,
+  } = directives.rest as RestLink.DirectiveOptions;
+  if (!method) {
+    method = 'GET';
+  }
+
+  let body = undefined;
+  let overrideHeaders: Headers = undefined;
+  if (
+    -1 === ['GET', 'DELETE'].indexOf(method) &&
+    operationType === 'mutation'
+  ) {
+    // Prepare our body!
+    if (!bodyBuilder) {
+      // By convention GraphQL recommends mutations having a single argument named "input"
+      // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
+
+      const maybeBody =
+        allParams.exportVariables[bodyKey || 'input'] ||
+        allParams.args[bodyKey || 'input'];
+      if (!maybeBody) {
+        throw new Error(
+          '[GraphQL mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
+        );
+      }
+
+      bodyBuilder = (argsWithExport: object) => {
+        return maybeBody;
+      };
+    }
+    body = convertObjectKeys(
+      bodyBuilder(allParams),
+      perRequestNameDenormalizer ||
+        linkLevelNameDenormalizer ||
+        noOpNameNormalizer,
+    );
+
+    let serializedBody: RestLink.SerializedBody;
+
+    if (typeof bodySerializer === 'string') {
+      if (!serializers.hasOwnProperty(bodySerializer)) {
+        throw new Error(
+          '"bodySerializer" must correspond to configured serializer. ' +
+            `Please make sure to specify a serializer called ${bodySerializer} in the "bodySerializers" property of the RestLink.`,
+        );
+      }
+      serializedBody = serializers[bodySerializer](body, headers);
+    } else {
+      serializedBody = bodySerializer
+        ? bodySerializer(body, headers)
+        : serializers[DEFAULT_SERIALIZER_KEY](body, headers);
+    }
+
+    body = serializedBody.body;
+    overrideHeaders = new Headers(serializedBody.headers);
+  }
+
+  validateRequestMethodForOperationType(method, operationType || 'query');
+
+  const requestParams = {
+    method,
+    headers: overrideHeaders || headers,
+    body: body,
+
+    // Only set credentials if they're non-null as some browsers throw an exception:
+    // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
+    ...(credentials ? { credentials } : {}),
+  };
+  const requestUrl = `${endpointOption.uri}${pathWithParams}`;
+
+  const response = await (customFetch || fetch)(requestUrl, requestParams);
+  context.responses.push(response);
+
+  let result;
+  if (response.ok) {
+    if (
+      response.status === 204 ||
+      response.headers.get('Content-Length') === '0'
+    ) {
+      // HTTP-204 means "no-content", similarly Content-Length implies the same
+      // This commonly occurs when you POST/PUT to the server, and it acknowledges
+      // success, but doesn't return your Resource.
+      result = {};
+    } else {
+      result = await response.json();
+    }
+  } else if (response.status === 404) {
+    // In a GraphQL context a missing resource should be indicated by
+    // a null value rather than throwing a network error
+    result = null;
+  } else {
+    // Default error handling:
+    // Throw a JSError, that will be available under the
+    // "Network error" category in apollo-link-error
+    let parsed: any;
+    // responses need to be cloned as they can only be read once
+    try {
+      parsed = await response.clone().json();
+    } catch (error) {
+      // its not json
+      parsed = await response.clone().text();
+    }
+    rethrowServerSideError(
+      response,
+      parsed,
+      `Response not successful: Received status code ${response.status}`,
+    );
+  }
+
+  if (endpointOption.responseTransformer) {
+    result = endpointOption.responseTransformer(result, type);
+  } else if (responseTransformer) {
+    result = responseTransformer(result, type);
+  }
+
+  if (fieldNameNormalizer !== null) {
+    result = convertObjectKeys(result, fieldNameNormalizer);
+  }
+
+  result = findRestDirectivesThenInsertNullsForOmittedFields(
+    resultKey,
+    result,
+    mainDefinition,
+    fragmentMap,
+    mainDefinition.selectionSet,
+  );
+
+  return addTypeNameToResult(result, type, typePatcher);
 };
 
 /**
@@ -1097,15 +1088,15 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
  */
 export class RestLink extends ApolloLink {
-  private endpoints: RestLink.Endpoints;
-  private headers: Headers;
-  private fieldNameNormalizer: RestLink.FieldNameNormalizer;
-  private fieldNameDenormalizer: RestLink.FieldNameNormalizer;
-  private typePatcher: RestLink.FunctionalTypePatcher;
-  private credentials: RequestCredentials;
-  private customFetch: RestLink.CustomFetch;
-  private serializers: RestLink.Serializers;
-  private responseTransformer: RestLink.ResponseTransformer;
+  private readonly endpoints: RestLink.Endpoints;
+  private readonly headers: Headers;
+  private readonly fieldNameNormalizer: RestLink.FieldNameNormalizer;
+  private readonly fieldNameDenormalizer: RestLink.FieldNameNormalizer;
+  private readonly typePatcher: RestLink.FunctionalTypePatcher;
+  private readonly credentials: RequestCredentials;
+  private readonly customFetch: RestLink.CustomFetch;
+  private readonly serializers: RestLink.Serializers;
+  private readonly responseTransformer: RestLink.ResponseTransformer;
 
   constructor({
     uri,
