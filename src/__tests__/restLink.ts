@@ -2612,6 +2612,44 @@ describe('Mutation', () => {
     });
   });
 
+  it('returns an error on zero Content-Length but status > 300', async () => {
+    expect.assertions(1);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const post = { id: '1', title: 'Love apollo' };
+    fetchMock.post('/api/posts', {
+      headers: { 'Content-Length': 0 },
+      status: 500,
+      body: post,
+    });
+
+    const createPostMutation = gql`
+      fragment PublishablePostInput on REST {
+        title: String
+      }
+
+      mutation publishPost($input: PublishablePostInput!) {
+        publishedPost(input: $input)
+          @rest(type: "Post", path: "/posts", method: "POST") {
+          id
+          title
+        }
+      }
+    `;
+    return await makePromise<Result>(
+      execute(link, {
+        operationName: 'publishPost',
+        query: createPostMutation,
+        variables: { input: { title: post.title } },
+      }),
+    ).catch(e =>
+      expect(e).toEqual(
+        new Error('Response not successful: Received status code 500'),
+      ),
+    );
+  });
+
   describe('fieldNameDenormalizer', () => {
     afterEach(() => {
       fetchMock.restore();
