@@ -783,7 +783,7 @@ interface RequestContext {
 
   /** Exported variables fulfilled in this request, using @export(as:) */
   exportVariables: { [key: string]: any };
-
+  constants?: { [key: string]: any };
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
   operationType: OperationTypeNode;
@@ -1245,6 +1245,7 @@ export class RestLink extends ApolloLink {
 
     const requestContext: RequestContext = {
       headers,
+      constants: context.constants,
       endpoints: this.endpoints,
       // Provide an empty hash for this request's exports to be stuffed into
       exportVariables: {},
