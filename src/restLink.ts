@@ -1017,7 +1017,7 @@ const resolver: Resolver = async (
       // success, but doesn't return your Resource.
       result = {};
     } else {
-      result = await response.json();
+      result = response;
     }
   } else if (response.status === 404) {
     // In a GraphQL context a missing resource should be indicated by
@@ -1042,10 +1042,17 @@ const resolver: Resolver = async (
     );
   }
 
-  if (endpointOption.responseTransformer) {
-    result = endpointOption.responseTransformer(result, type);
-  } else if (responseTransformer) {
-    result = responseTransformer(result, type);
+  const transformer = endpointOption.responseTransformer || responseTransformer;
+  if (transformer) {
+    // A responseTransformer might call something else than json() on the response.
+    try {
+      result = await transformer(result, type);
+    } catch (err) {
+      console.warn('An error occurred in a responseTransformer:');
+      throw err;
+    }
+  } else if (result && result.json) {
+    result = await result.json();
   }
 
   if (fieldNameNormalizer !== null) {

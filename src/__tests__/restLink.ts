@@ -832,9 +832,9 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         uri: '/api',
-        responseTransformer: (data, type) => {
+        responseTransformer: async (response, type) => {
           expect(type).toBe('Post');
-
+          const data = await response.json();
           return data.post;
         },
       });
@@ -866,9 +866,9 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         uri: '/api',
-        responseTransformer: (data, type) => {
+        responseTransformer: async (response, type) => {
           expect(type).toBe('[Post]');
-
+          const data = await response.json();
           return data.posts;
         },
       });
@@ -892,7 +892,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
   });
 
   describe('with endpoint level `responseTransformer`', () => {
-    it('handles single record responses', async () => {
+    it('handles single record responses', async done => {
       fetchMock.get('/api/v1/posts/1', {
         meta: {},
         post: posts[1],
@@ -900,13 +900,14 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         // This is purpsefully wrong so that we verify the endpoint one is called
-        responseTransformer: data => data.record,
+        responseTransformer: () =>
+          done.fail('Should have called endpoint.responseTransformer'),
         endpoints: {
           v1: {
             uri: '/api/v1',
-            responseTransformer: (data, type) => {
+            responseTransformer: async (response, type) => {
               expect(type).toBe('Post');
-
+              const data = await response.json();
               return data.post;
             },
           },
@@ -930,23 +931,24 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           __typename: 'Post',
         },
       });
+      done();
     });
 
-    it('handles multiple record responses', async () => {
+    it('handles multiple record responses', async done => {
       fetchMock.get('/api/v1/posts', {
         meta: {},
         posts,
       });
 
       const link = new RestLink({
-        // This is purpsefully wrong so that we verify the endpoint one is called
-        responseTransformer: data => data.collection,
+        responseTransformer: () =>
+          done.fail('Should have called endpoint.responseTransformer'),
         endpoints: {
           v1: {
             uri: '/api/v1',
-            responseTransformer: (data, type) => {
+            responseTransformer: async (response, type) => {
               expect(type).toBe('[Post]');
-
+              const data = await response.json();
               return data.posts;
             },
           },
@@ -968,6 +970,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           { title: 'Respect apollo', __typename: 'Post' },
         ],
       });
+      done();
     });
   });
 });

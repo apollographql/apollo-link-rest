@@ -278,16 +278,9 @@ And when fetching for a list of users (`/users`), the following response is expe
 ]
 ```
 
-If the structure of your API responses differs than what Apollo expects, you can define a `responseTransformer` in the client. This function receives the JSON response as the 1st argument, and the current `typeName` as the 2nd argument.
+If the structure of your API responses differs than what Apollo expects, you can define a `responseTransformer` in the client. This function receives the response object as the 1st argument, and the current `typeName` as the 2nd argument. It should return a `Promise` as it will be responsible for reading the response stream by calling one of `json()`, `text()` etc.
 
-```js
-const link = new RestLink({
-  uri: '/api',
-  responseTransformer: response => response.data,
-});
-```
-
-With the previously defined transformer, the following response structure would be supported.
+For instance if the record is not at the root level:
 
 ```json
 {
@@ -305,6 +298,26 @@ With the previously defined transformer, the following response structure would 
 }
 ```
 
+The following transformer could be used to support it:
+
+
+```js
+const link = new RestLink({
+  uri: '/api',
+  responseTransformer: async response => response.json().then(({data}) => data),
+});
+```
+
+Plaintext responses can be handled by manually parsing and converting them to JSON (using the previously described format that Apollo expects):
+
+```js
+const link = new RestLink({
+  uri: '/xmlApi',
+  responseTransformer: async response => response.text().then(text => parseXmlResponseToJson(text)),
+});
+
+```
+
 <h3 id="options.responseTransformer.endpoints">Custom endpoint responses</h3>
 
 The client level `responseTransformer` applies for all responses, across all URIs and endpoints. If you need a custom `responseTransformer` per endpoint, you can define an object of options for that specific endpoint.
@@ -314,11 +327,11 @@ const link = new RestLink({
   endpoints: {
     v1: {
       uri: '/v1',
-      responseTransformer: response => response.data,
+      responseTransformer: async response => response.data,
     },
     v2: {
       uri: '/v2',
-      responseTransformer: (response, typeName) => response[typeName],
+      responseTransformer: async (response, typeName) => response[typeName],
     },
   },
 });
