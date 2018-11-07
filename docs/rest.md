@@ -308,7 +308,7 @@ const link = new RestLink({
 });
 ```
 
-Plaintext responses can be handled by manually parsing and converting them to JSON (using the previously described format that Apollo expects):
+Plaintext, or XML, or otherwise-encoded responses can be handled by manually parsing and converting them to JSON (using the previously described format that Apollo expects):
 
 ```js
 const link = new RestLink({
