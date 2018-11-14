@@ -4,6 +4,8 @@
 
 ### v0.next
 
+* Remove restriction that only allows request bodies to be built for Mutation operations. [#154](https://github.com/apollographql/apollo-link-rest/issues/154) 
+
 ### v0.6.0
 
 * Feature: responseTransformers allow you to restructure & erase "wrapper" objects from your responses. [#146](https://github.com/apollographql/apollo-link-rest/pull/146)
