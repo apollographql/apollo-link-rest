@@ -4,7 +4,7 @@
 
 ### v0.next
 
-* Remove restriction that only allows request bodies to be built for Mutation operations. [#154](https://github.com/apollographql/apollo-link-rest/issues/154) 
+* Remove restriction that only allows request bodies to be built for Mutation operations. [#154](https://github.com/apollographql/apollo-link-rest/issues/154) & [#173](https://github.com/apollographql/apollo-link-rest/pull/173)
 
 ### v0.6.0
 
