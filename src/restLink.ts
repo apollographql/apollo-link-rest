@@ -951,10 +951,11 @@ const resolver: Resolver = async (
       // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
 
       const maybeBody =
-        allParams.exportVariables[bodyKey] || allParams.args[bodyKey];
+        allParams.exportVariables[bodyKey] ||
+        (allParams.args && allParams.args[bodyKey]);
       if (!maybeBody) {
         throw new Error(
-          `[GraphQL ${operationType} using a REST call without a body]. No \`${bodyKey}\` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.`,
+          `[GraphQL ${method} ${operationType} using a REST call without a body]. No \`${bodyKey}\` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.`,
         );
       }
 
