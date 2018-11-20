@@ -333,7 +333,7 @@ Here is one way you might customize `RestLink`:
 ```js
   import fetch from 'node-fetch';
   import * as camelCase from 'camelcase';
-  import * as snake_case from 'snack-case';
+  import * as snake_case from 'snake-case';
 
   const link = new RestLink({
     endpoints: { github: 'github.com' },
