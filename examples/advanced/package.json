@@ -9,6 +9,7 @@
     "graphql": "0.x",
     "graphql-anywhere": "4.x",
     "graphql-tag": "2.x",
+    "qs": "^6.6.0",
     "react": "16.x",
     "react-apollo": "2.x",
     "react-dom": "16.x",
