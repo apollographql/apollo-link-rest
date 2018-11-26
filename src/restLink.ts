@@ -938,24 +938,24 @@ const resolver: Resolver = async (
   if (!method) {
     method = 'GET';
   }
+  if (!bodyKey) {
+    bodyKey = 'input';
+  }
 
   let body = undefined;
   let overrideHeaders: Headers = undefined;
-  if (
-    -1 === ['GET', 'DELETE'].indexOf(method) &&
-    operationType === 'mutation'
-  ) {
+  if (-1 === ['GET', 'DELETE'].indexOf(method)) {
     // Prepare our body!
     if (!bodyBuilder) {
       // By convention GraphQL recommends mutations having a single argument named "input"
       // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
 
       const maybeBody =
-        allParams.exportVariables[bodyKey || 'input'] ||
-        allParams.args[bodyKey || 'input'];
+        allParams.exportVariables[bodyKey] ||
+        (allParams.args && allParams.args[bodyKey]);
       if (!maybeBody) {
         throw new Error(
-          '[GraphQL mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
+          `[GraphQL ${method} ${operationType} using a REST call without a body]. No \`${bodyKey}\` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.`,
         );
       }
 
@@ -963,6 +963,7 @@ const resolver: Resolver = async (
         return maybeBody;
       };
     }
+
     body = convertObjectKeys(
       bodyBuilder(allParams),
       perRequestNameDenormalizer ||
