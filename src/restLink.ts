@@ -650,7 +650,7 @@ export const normalizeHeaders = (
   if (headers instanceof Headers) {
     return headers;
   } else {
-    return new Headers(headers);
+    return new Headers(headers || {});
   }
 };
 

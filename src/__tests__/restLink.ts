@@ -2333,6 +2333,47 @@ describe('Query options', () => {
         'accept: application/json',
       ]);
     });
+    it('generates a new headers object if headers are undefined', async () => {
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          headers: undefined,
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeUndefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({ uri: '/api', headers: undefined }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'accept: application/json',
+      ]);
+    });
   });
 });
 
