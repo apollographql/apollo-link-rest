@@ -1085,7 +1085,7 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
   data: any,
   headers: Headers,
 ) => {
-  headers.set('Content-Type', 'application/json');
+  headers.append('Content-Type', 'application/json');
   return {
     body: JSON.stringify(data),
     headers: headers,
@@ -1201,12 +1201,6 @@ export class RestLink extends ApolloLink {
       [DEFAULT_SERIALIZER_KEY]: defaultSerializer || DEFAULT_JSON_SERIALIZER,
       ...(bodySerializers || {}),
     };
-
-    if (!this.headers.has('Accept')) {
-      // Since we assume a json body on successful responses set the Accept
-      // header accordingly if it is not provided by the user
-      this.headers.set('Accept', 'application/json');
-    }
   }
 
   public request(
@@ -1239,6 +1233,11 @@ export class RestLink extends ApolloLink {
     }
 
     const headers = headersMergePolicy(this.headers, context.headers);
+    if (!headers.has('Accept')) {
+      // Since we assume a json body on successful responses set the Accept
+      // header accordingly if it is not provided by the user
+      headers.append('Accept', 'application/json');
+    }
 
     const credentials: RequestCredentials =
       context.credentials || this.credentials;
