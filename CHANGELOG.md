@@ -4,7 +4,23 @@
 
 ### v0.next
 
+### v0.7.0 - Breaking!
+
+#### Breaking changes around `responseTransformer!`
+
+In this [PR #165](https://github.com/apollographql/apollo-link-rest/pull/165), we realized that the `responseTransformer` feature added last release wasn't broad enough, `responseTransformer`s now receive the raw response stream instead of just the `json()`-promise.
+
+Code which relies on this feature will break, however the fix should be very simple:
+
+    Either the responseTransformer function is made `async` and to `await response.json()`, *or* if this syntax is not available, the existing code needs to be wrapped in `response.json().then(data => {/* existing implementation */})`.
+
+#### Other Changes
+
 * Remove restriction that only allows request bodies to be built for Mutation operations. [#154](https://github.com/apollographql/apollo-link-rest/issues/154) & [#173](https://github.com/apollographql/apollo-link-rest/pull/173)
+* Fix code sandbox examples [#177](https://github.com/apollographql/apollo-link-rest/pull/177)
+* Bug-fix: default to empty headers instead of undefined for IE [#178](https://github.com/apollographql/apollo-link-rest/pull/178)
+* Various docs typo fixes
+
 
 ### v0.6.0
 
