@@ -2207,11 +2207,10 @@ describe('Query options', () => {
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
       expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
-        'setup: setup',
-        'setup: in-context duplicate setup',
         'accept: application/json',
         'authorization: 1234',
         'context: context',
+        'setup: setup, in-context duplicate setup',
       ]);
     });
     it('respects context-provided header-merge policy', async () => {
@@ -2328,9 +2327,8 @@ describe('Query options', () => {
         orderedFlattened.push(`${key}: ${value}`);
       });
       expect(orderedFlattened).toEqual([
-        'authorization: initial setup',
-        'authorization: context',
         'accept: application/json',
+        'authorization: initial setup, context',
       ]);
     });
     it('generates a new headers object if headers are undefined', async () => {
