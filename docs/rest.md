@@ -28,10 +28,10 @@ For an apollo client to work, you need a link and a cache, [more info here](/doc
 npm install --save apollo-cache-inmemory
 ```
 
-Then it is time to install our link:
+Then it is time to install our link and its `peerDependencies`:
 
 ```bash
-npm install apollo-link-rest --save
+npm install apollo-link-rest apollo-link graphql graphql-anywhere--save
 ```
 
 After this, you are ready to setup your apollo client:
@@ -42,7 +42,7 @@ import { InMemoryCache } from 'apollo-cache-inmemory';
 import { RestLink } from 'apollo-link-rest';
 
 // setup your `RestLink` with your endpoint
-const link = new RestLink({ uri: "https://swapi.co/api/" });
+const restLink = new RestLink({ uri: "https://swapi.co/api/" });
 
 // setup your client
 const client = new ApolloClient({
@@ -92,7 +92,7 @@ Construction of `RestLink` takes an options object to customize the behavior of 
 * `typePatcher: /map-of-functions/`: _optional_ Structure to allow you to specify the `__typename` when you have nested objects in your REST response!
 * `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. The function will also be passed the current `Header` set, which can be updated before the request is sent to `fetch`. Default method uses `JSON.stringify` and sets the `Content-Type` to `application/json`.
 * `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
-- `responseTransformer?: /function/`: _optional_ Apollo expects a record response to return a root object, and a collection of records response to return an array of objects. Use this function to structure the response into the format Apollo expects if your response data is structured differently.
+* `responseTransformer?: /function/`: _optional_ Apollo expects a record response to return a root object, and a collection of records response to return an array of objects. Use this function to structure the response into the format Apollo expects if your response data is structured differently.
 
 
 <h3 id="options.endpoints">Multiple endpoints</h3>
@@ -151,7 +151,7 @@ query MyQuery {
 }
 ```
 
-The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`.
+The outer response object (`data.planets`) gets its `__typename: "PlanetPayload"` from the [`@rest(...)` directive's `type` parameter](#rest). You, however, need to have a way to set the typename of `PlanetPayload.results`. 
 
 One way you can do this is by providing a `typePatcher`:
 
