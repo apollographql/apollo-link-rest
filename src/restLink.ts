@@ -607,8 +607,9 @@ const convertObjectKeys = (
     converter = __converter;
   }
 
-  if (object == null || typeof object !== 'object') {
+  if (object == null || typeof object !== 'object' || object instanceof FileList || object instanceof File) {
     // Object is a scalar or null / undefined => no keys to convert!
+    // Object is a FileList or File object => no keys to convert!
     return object;
   }
 
