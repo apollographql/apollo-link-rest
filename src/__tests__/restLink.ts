@@ -3261,6 +3261,79 @@ describe('Mutation', () => {
       );
     });
 
+    it('returns the original object if the body serializers have a File or FileList object', async () => {
+      expect.assertions(2);
+
+      const link = new RestLink({
+        uri: '/api',
+        bodySerializers: {
+          upFiles: (body, headers) => ({
+            body,
+            headers,
+          }),
+        },
+      });
+      // define a File object
+      const file = new File(['Love apollo'], 'apollo.txt', {
+        type: 'text/plain',
+      });
+      //body containing Primitives, Objects and Arrays types
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+        attachment: file,
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+          attachment: File
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/newComplexPost"
+              method: "POST"
+              bodySerializer: "upFiles"
+            ) {
+            id
+            title
+            items
+            attachment
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(requestCall[1].body).toEqual(
+        expect.objectContaining({ attachment: file }),
+      );
+    });
+
     it('throws if there is no custom serializer defined', () => {
       expect.assertions(1);
       const link = new RestLink({
