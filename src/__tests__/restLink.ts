@@ -3262,8 +3262,7 @@ describe('Mutation', () => {
     });
 
     it('returns the original object if the body serializers have a File or FileList object', async () => {
-      expect.assertions(2);
-
+      expect.assertions(3);
       const link = new RestLink({
         uri: '/api',
         bodySerializers: {
@@ -3273,16 +3272,36 @@ describe('Mutation', () => {
           }),
         },
       });
+
       // define a File object
       const file = new File(['Love apollo'], 'apollo.txt', {
         type: 'text/plain',
       });
+      //mocking FileList object
+      const mockFileList = Object.create(FileList.prototype);
+      Object.defineProperty(mockFileList, 'item', {
+        value: function(number: number) {
+          return mockFileList[number];
+        },
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      Object.defineProperty(mockFileList, 'length', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      mockFileList[0] = file;
+
       //body containing Primitives, Objects and Arrays types
       const post = {
         id: '1',
         title: 'Love apollo',
         items: [{ name: 'first' }, { name: 'second' }],
-        attachment: file,
+        attachments: mockFileList,
+        cover: file,
       };
 
       fetchMock.post('/api/posts/newComplexPost', post);
@@ -3298,7 +3317,8 @@ describe('Mutation', () => {
           items {
             ...Item
           }
-          attachment: File
+          cover: File
+          attachment: FileList
         }
 
         mutation publishPost($input: PublishablePostInput!) {
@@ -3312,7 +3332,8 @@ describe('Mutation', () => {
             id
             title
             items
-            attachment
+            cover
+            attachments
           }
         }
       `;
@@ -3330,7 +3351,10 @@ describe('Mutation', () => {
         expect.objectContaining({ method: 'POST' }),
       );
       expect(requestCall[1].body).toEqual(
-        expect.objectContaining({ attachment: file }),
+        expect.objectContaining({ cover: file }),
+      );
+      expect(requestCall[1].body).toEqual(
+        expect.objectContaining({ attachments: mockFileList }),
       );
     });
 
