@@ -611,6 +611,11 @@ const convertObjectKeys = (
     // Object is a scalar or null / undefined => no keys to convert!
     return object;
   }
+  
+  if (object instanceof FileList || object instanceof File) {
+    // Object is a FileList or File object => no keys to convert!
+    return object
+  }
 
   if (Array.isArray(object)) {
     return object.map((o, index) =>

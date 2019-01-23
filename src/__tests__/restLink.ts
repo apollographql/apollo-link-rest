@@ -3261,6 +3261,103 @@ describe('Mutation', () => {
       );
     });
 
+    it('returns the original object if the body serializers have a File or FileList object', async () => {
+      expect.assertions(3);
+      const link = new RestLink({
+        uri: '/api',
+        bodySerializers: {
+          upFiles: (body, headers) => ({
+            body,
+            headers,
+          }),
+        },
+      });
+
+      // define a File object
+      const file = new File(['Love apollo'], 'apollo.txt', {
+        type: 'text/plain',
+      });
+      //mocking FileList object
+      const mockFileList = Object.create(FileList.prototype);
+      Object.defineProperty(mockFileList, 'item', {
+        value: function(number: number) {
+          return mockFileList[number];
+        },
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      Object.defineProperty(mockFileList, 'length', {
+        value: 1,
+        writable: false,
+        enumerable: true,
+        configurable: false,
+      });
+      mockFileList[0] = file;
+
+      //body containing Primitives, Objects and Arrays types
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+        attachments: mockFileList,
+        cover: file,
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+          cover: File
+          attachment: FileList
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/newComplexPost"
+              method: "POST"
+              bodySerializer: "upFiles"
+            ) {
+            id
+            title
+            items
+            cover
+            attachments
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(requestCall[1].body).toEqual(
+        expect.objectContaining({ cover: file }),
+      );
+      expect(requestCall[1].body).toEqual(
+        expect.objectContaining({ attachments: mockFileList }),
+      );
+    });
+
     it('throws if there is no custom serializer defined', () => {
       expect.assertions(1);
       const link = new RestLink({
