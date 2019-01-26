@@ -1830,6 +1830,52 @@ describe('Query options', () => {
   afterEach(() => {
     fetchMock.restore();
   });
+
+  describe('context', () => {
+    it('makes context values available in query', async () => {
+      const contextMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          constants: { lang: 'en' },
+        });
+        return forward(operation).map(result => {
+          const {
+            constants: { lang },
+          } = operation.getContext();
+          expect(lang).toBe('en');
+          return result;
+        });
+      });
+
+      const link = ApolloLink.from([
+        contextMiddleware,
+        new RestLink({
+          uri: '/api',
+        }),
+      ]);
+
+      const postQuery = gql`
+        query postTitle {
+          post
+            @rest(type: "Post", path: "/posts?lang={context.constants.lang}") {
+            id
+            title
+          }
+        }
+      `;
+
+      fetchMock.get('path:/api/posts', {});
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'postQuery',
+          query: postQuery,
+        }),
+      );
+
+      expect(fetchMock.called('/api/posts?lang=en')).toBe(true);
+    });
+  });
+
   describe('credentials', () => {
     it('adds credentials to the request from the setup', async () => {
       expect.assertions(1);
@@ -2809,6 +2855,7 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
+
     it('builds request body containing Strings/Objects/Arrays types without changing their types', async () => {
       // tests convertObjectKeys functionality
       // see: https://github.com/apollographql/apollo-link-rest/issues/45
