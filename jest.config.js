@@ -4,6 +4,11 @@ module.exports = {
     'ts-jest': {
       babelConfig: false,
       mapCoverage: true,
+      diagnostics:{
+        ignoreCodes: [
+          151001 // Suppress esModuleInterop suggestion that breaks __tests__/restLink.ts
+        ]
+      }
     },
   },
   transform: {
