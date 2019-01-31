@@ -4,7 +4,10 @@ module.exports = {
     'ts-jest': {
       babelConfig: false,
       mapCoverage: true,
-      diagnostics:{
+      compilerOptions: {
+        allowJs: true, // Necessary for jest.js
+      },
+      diagnostics: {
         ignoreCodes: [
           151001 // Suppress esModuleInterop suggestion that breaks __tests__/restLink.ts
         ]
