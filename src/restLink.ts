@@ -611,10 +611,10 @@ const convertObjectKeys = (
     // Object is a scalar or null / undefined => no keys to convert!
     return object;
   }
-  
+
   if (object instanceof FileList || object instanceof File) {
     // Object is a FileList or File object => no keys to convert!
-    return object
+    return object;
   }
 
   if (Array.isArray(object)) {
@@ -1090,7 +1090,9 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
   data: any,
   headers: Headers,
 ) => {
-  headers.append('Content-Type', 'application/json');
+  if (!headers.has('content-type')) {
+    headers.append('Content-Type', 'application/json');
+  }
   return {
     body: JSON.stringify(data),
     headers: headers,
