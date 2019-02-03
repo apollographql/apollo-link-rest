@@ -342,6 +342,10 @@ const link = new RestLink({
 <h3 id=options.example.customFetch>Custom Fetch</h3>
 
 By default, Apollo uses the browsers `fetch` method to handle `REST` requests to your domain/endpoint. The `customFetch` option allows you to specify _your own_ request handler by defining a function that returns a `Promise` with a fetch-response-like object:
+
+<h3 id=options.example.customFetch>Custom Fetch</h3>
+
+By default, Apollo uses the browsers `fetch` method to handle `REST` requests to your domain/endpoint. The `customFetch` option allows you to specify _your own_ request handler by defining a function that returns a `Promise` with a fetch-response-like object:
 ```js
 const link = new RestLink({
   endpoints: "/api",
@@ -352,11 +356,11 @@ const link = new RestLink({
 });
 ```
 
-To resolve your GraphQL queries quickly, Apollo will issue requests to all endpoints as soon as possible. This is generally ok, but can lead to large numbers of `REST` requests to be fired at once; especially for deeply nested queries [(see `@export` directive)](#export). 
+To resolve your GraphQL queries quickly, Apollo will issue requests to relevant endpoints as soon as possible. This is generally ok, but can lead to large numbers of `REST` requests to be fired at once; especially for deeply nested queries [(see `@export` directive)](#export). 
 
-Some endpoints (like public APIs) might enforce _rate limits_, leading to failed responses and unresolved queries in such cases.
+> Some endpoints (like public APIs) might enforce _rate limits_, leading to failed responses and unresolved queries in such cases.
 
-By example, `customFetch` is good place to manage your apps fetch operations. The following implementation makes sure to only issue 2 requests at a time (concurrency) while waiting at least 500ms until the next batch of requests is fired. 
+By example, `customFetch` is a good place to manage your apps fetch operations. The following implementation makes sure to only issue 2 requests at a time (concurrency) while waiting at least 500ms until the next batch of requests is fired. 
 ```js
 import pThrottle from "p-throttle";
 
