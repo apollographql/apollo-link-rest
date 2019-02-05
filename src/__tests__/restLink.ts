@@ -2809,6 +2809,56 @@ describe('Mutation', () => {
     afterEach(() => {
       fetchMock.restore();
     });
+    it("if using the regular JSON bodyBuilder it doesn't stack multiple content-type headers", async () => {
+      const CUSTOM_JSON_CONTENT_TYPE = 'my-custom-json-ish-content-type';
+
+      const link = new RestLink({
+        uri: '/api',
+        headers: { 'Content-Type': CUSTOM_JSON_CONTENT_TYPE },
+      });
+      const post = {
+        id: '1',
+        title: 'Love apollo',
+        items: [{ name: 'first' }, { name: 'second' }],
+      };
+
+      fetchMock.post('/api/posts/newComplexPost', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            id
+            title
+            items
+          }
+        }
+      `;
+
+      await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: post },
+        }),
+      );
+      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
+      expect(requestCall[1].headers.get('content-type')).toEqual(
+        CUSTOM_JSON_CONTENT_TYPE,
+      );
+    });
     it('builds request body containing Strings/Objects/Arrays types without changing their types', async () => {
       // tests convertObjectKeys functionality
       // see: https://github.com/apollographql/apollo-link-rest/issues/45
