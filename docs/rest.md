@@ -342,10 +342,6 @@ const link = new RestLink({
 <h3 id=options.example.customFetch>Custom Fetch</h3>
 
 By default, Apollo uses the browsers `fetch` method to handle `REST` requests to your domain/endpoint. The `customFetch` option allows you to specify _your own_ request handler by defining a function that returns a `Promise` with a fetch-response-like object:
-
-<h3 id=options.example.customFetch>Custom Fetch</h3>
-
-By default, Apollo uses the browsers `fetch` method to handle `REST` requests to your domain/endpoint. The `customFetch` option allows you to specify _your own_ request handler by defining a function that returns a `Promise` with a fetch-response-like object:
 ```js
 const link = new RestLink({
   endpoints: "/api",
