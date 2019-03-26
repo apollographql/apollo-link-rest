@@ -4,6 +4,10 @@
 
 ### v0.next
 
+### v0.7.2
+
+* Fix: FileList/File aren't available in react-native causing crashes. [#200](https://github.com/apollographql/apollo-link-rest/pull/200)
+
 ### v0.7.1
 
 * Fix: Duplicated Content Type Header [#188](https://github.com/apollographql/apollo-link-rest/pull/188)
