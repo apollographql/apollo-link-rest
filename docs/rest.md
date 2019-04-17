@@ -425,8 +425,8 @@ Here is one way to add request `headers` to the context and retrieve the respons
 
 ```js
 const authRestLink = new ApolloLink((operation, forward) => {
-  operation.setContext(async ({headers}) => {
-    const token = await localStorage.getItem("token");
+  operation.setContext(({headers}) => {
+    const token = localStorage.getItem("token");
     return {
       headers: {
         ...headers,
@@ -439,9 +439,10 @@ const authRestLink = new ApolloLink((operation, forward) => {
     const { restResponses } = operation.getContext();
     const authTokenResponse = restResponses.find(res => res.headers.has("Authorization"));
     // You might also filter on res.url to find the response of a specific API call
-    return authTokenResponse
-      ? localStorage.setItem("token", authTokenResponse.headers.get('Authorization')).then(() => result)
-      : result;
+    if (authTokenResponse) {
+      localStorage.setItem("token", authTokenResponse.headers.get("Authorization"));
+    }
+    return result;
   });
 });
 
