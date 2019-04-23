@@ -791,8 +791,8 @@ interface RequestContext {
   /** Credentials Policy for Fetch */
   credentials?: RequestCredentials | null;
 
-  /** Exported variables fulfilled in this request, using @export(as:) */
-  exportVariables: { [key: string]: any };
+  /** Exported variables fulfilled in this request, using @export(as:). They are stored keyed by node to support deeply nested structures with exports at multiple levels */
+  exportVariablesByNode: Map<any, { [key: string]: any }>;
 
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
@@ -832,7 +832,21 @@ const resolver: Resolver = async (
   info: ExecInfo,
 ) => {
   const { directives, isLeaf, resultKey } = info;
-  const { exportVariables } = context;
+  const { exportVariablesByNode } = context;
+
+  const exportVariables = exportVariablesByNode.get(root) || {};
+
+  /** creates a copy of this node's export variables for its child nodes. iterates over array results to provide for each child. returns the passed result. */
+  const copyExportVariables = <T>(result: T): T => {
+    if (result instanceof Array) {
+      result.forEach(copyExportVariables);
+    } else {
+      // export variables are stored keyed on the node they are for
+      exportVariablesByNode.set(result, { ...exportVariables });
+    }
+
+    return result;
+  };
 
   // Support GraphQL Aliases!
   const aliasedNode = (root || {})[resultKey];
@@ -862,7 +876,7 @@ const resolver: Resolver = async (
   if (isNotARestCall) {
     // This is not tagged with @rest()
     // This might not belong to us so return the aliasNode version preferentially
-    return aliasedNode || preAliasingNode;
+    return copyExportVariables(aliasedNode || preAliasingNode);
   }
   const {
     credentials,
@@ -1078,7 +1092,8 @@ const resolver: Resolver = async (
     mainDefinition.selectionSet,
   );
 
-  return addTypeNameToResult(result, type, typePatcher);
+  result = addTypeNameToResult(result, type, typePatcher);
+  return copyExportVariables(result);
 };
 
 /**
@@ -1265,8 +1280,8 @@ export class RestLink extends ApolloLink {
     const requestContext: RequestContext = {
       headers,
       endpoints: this.endpoints,
-      // Provide an empty hash for this request's exports to be stuffed into
-      exportVariables: {},
+      // Provide an empty map for this request's exports to be stuffed into
+      exportVariablesByNode: new Map(),
       credentials,
       customFetch: this.customFetch,
       operationType,
