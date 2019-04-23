@@ -3579,6 +3579,91 @@ describe('export directive', () => {
     expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
     expect(data.post.author).toEqual({ ...author, __typename: 'User' });
   });
+
+  it('can handle nested exports with deeply structured response data', async () => {
+    expect.assertions(3);
+
+    const link = new RestLink({ uri: '/api' });
+
+    const user = {
+      id: 'user-a',
+      posts: [
+        {
+          id: 'post-a',
+          tags: [
+            {
+              id: 'tag-a',
+            },
+            {
+              id: 'tag-b',
+            },
+          ],
+        },
+        {
+          id: 'post-b',
+          tags: [
+            {
+              id: 'tag-c',
+            },
+          ],
+        },
+      ],
+    };
+    fetchMock.get('/api/user', user);
+    const postATagA = {
+      id: 'tag-a-details',
+      message: 'this is tag details a',
+    };
+    fetchMock.get('/api/posts/post-a/tags/tag-a', postATagA);
+    const postATagB = {
+      id: 'tag-b-details',
+      message: 'this is tag details b',
+    };
+    fetchMock.get('/api/posts/post-a/tags/tag-b', postATagB);
+    const postBTagC = {
+      id: 'tag-c-details',
+      message: 'this is tag details c',
+    };
+    fetchMock.get('/api/posts/post-b/tags/tag-c', postBTagC);
+
+    const userPostsWithTagDetails = gql`
+      query userPostsWithTagDetails {
+        user @rest(path: "/user") {
+          id
+          posts {
+            id @export(as: "postId")
+            tags {
+              id @export(as: "tagId")
+              details
+                @rest(
+                  path: "/posts/{exportVariables.postId}/tags/{exportVariables.tagId}"
+                ) {
+                id
+                message
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'userPostsWithTagDetails',
+        query: userPostsWithTagDetails,
+      }),
+    );
+
+    expect(data.user.posts[0].tags[0].details.message).toEqual(
+      'this is tag details a',
+    );
+    expect(data.user.posts[0].tags[1].details.message).toEqual(
+      'this is tag details b',
+    );
+    expect(data.user.posts[1].tags[0].details.message).toEqual(
+      'this is tag details c',
+    );
+  });
 });
 
 describe('Apollo client integration', () => {
