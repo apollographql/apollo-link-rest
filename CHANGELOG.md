@@ -4,6 +4,10 @@
 
 ### v0.next
 
+### v0.7.3
+
+* Fix: Nested `@rest(…)` calls with nested `@export(as:…)` directives should keep their contexts distinct in order to work. [#204](https://github.com/apollographql/apollo-link-rest/pull/204)
+
 ### v0.7.2
 
 * Fix: FileList/File aren't available in react-native causing crashes. [#200](https://github.com/apollographql/apollo-link-rest/pull/200)
