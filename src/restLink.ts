@@ -4,6 +4,7 @@ import {
   FragmentDefinitionNode,
   // Query Nodes
   DirectiveNode,
+  DocumentNode,
   FieldNode,
   SelectionSetNode,
 } from 'graphql';
@@ -24,13 +25,14 @@ import {
   isField,
   isInlineFragment,
   resultKeyNameFromField,
+  checkDocument,
+  removeDirectivesFromDocument,
 } from 'apollo-utilities';
 
 import { graphql } from 'graphql-anywhere/lib/async';
 import { Resolver, ExecInfo } from 'graphql-anywhere';
 
 import * as qs from 'qs';
-import { removeRestSetsFromDocument } from './utils';
 
 export namespace RestLink {
   export type URI = string;
@@ -1119,6 +1121,11 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
   };
 };
 
+const CONNECTION_REMOVE_CONFIG = {
+  test: (directive: DirectiveNode) => directive.name.value === 'rest',
+  remove: true,
+};
+
 /**
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
  */
@@ -1132,6 +1139,7 @@ export class RestLink extends ApolloLink {
   private readonly customFetch: RestLink.CustomFetch;
   private readonly serializers: RestLink.Serializers;
   private readonly responseTransformer: RestLink.ResponseTransformer;
+  private readonly processedDocuments: Map<DocumentNode, DocumentNode>;
 
   constructor({
     uri,
@@ -1228,6 +1236,22 @@ export class RestLink extends ApolloLink {
       [DEFAULT_SERIALIZER_KEY]: defaultSerializer || DEFAULT_JSON_SERIALIZER,
       ...(bodySerializers || {}),
     };
+    this.processedDocuments = new Map();
+  }
+
+  private removeRestSetsFromDocument(query: DocumentNode): DocumentNode {
+    const cached = this.processedDocuments.get(query);
+    if (cached) return cached;
+
+    checkDocument(query);
+
+    const docClone = removeDirectivesFromDocument(
+      [CONNECTION_REMOVE_CONFIG],
+      query,
+    );
+
+    this.processedDocuments.set(query, docClone);
+    return docClone;
   }
 
   public request(
@@ -1241,7 +1265,7 @@ export class RestLink extends ApolloLink {
       return forward(operation);
     }
 
-    const nonRest = removeRestSetsFromDocument(query);
+    const nonRest = this.removeRestSetsFromDocument(query);
 
     // 1. Use the user's merge policy if any
     let headersMergePolicy: RestLink.HeadersMergePolicy =
