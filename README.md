@@ -110,3 +110,8 @@ npm link
 # in the project you want to run this in
 npm link apollo-link-rest
 ```
+
+## Related Libraries
+
+[JSON API Link](https://github.com/Rsullivan00/apollo-link-json-api/) provides
+tooling for using GraphQL with JSON API compliant APIs.
