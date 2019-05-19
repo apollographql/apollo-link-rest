@@ -115,4 +115,4 @@ npm link apollo-link-rest
 
 - [JSON API Link](https://github.com/Rsullivan00/apollo-link-json-api/) provides
 tooling for using GraphQL with JSON API compliant APIs.
-- [apollo-type-patcher](https://github.com/mpgon/apollo-type-patcher) declarative type definitions for your REST API. No dependencies. 
+- [apollo-type-patcher](https://github.com/mpgon/apollo-type-patcher) declarative type definitions for your REST API with zero dependencies. 
