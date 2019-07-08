@@ -164,7 +164,7 @@ export namespace RestLink {
     /**
      * The credentials policy you want to use for the fetch call.
      */
-    credentials?: RequestCredentials;
+    credentials?: 'omit' | 'same-origin' | 'include';
 
     /**
      * Use a custom fetch to handle REST calls.
