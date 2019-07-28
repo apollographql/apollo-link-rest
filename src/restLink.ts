@@ -32,6 +32,11 @@ import { Resolver, ExecInfo } from 'graphql-anywhere';
 import * as qs from 'qs';
 import { removeRestSetsFromDocument } from './utils';
 
+// Make sure Headers is always defined before used with polyfill hack.
+if (typeof Headers === 'undefined') {
+  const Headers = require('fetch-headers');
+}
+
 export namespace RestLink {
   export type URI = string;
 

@@ -85,7 +85,8 @@
     "snake-case": "2.1.x",
     "ts-jest": "23.10.x",
     "typescript": "3.x",
-    "uglify-js": "3.4.x"
+    "uglify-js": "3.4.x",
+    "fetch-headers": "2.0.0"
   },
   "resolutions": {
     "babel-core": "7.0.0-bridge.0",
