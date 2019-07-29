@@ -35,7 +35,7 @@ import { removeRestSetsFromDocument } from './utils';
 // Make sure Headers is always defined before used with polyfill hack.
 if (typeof Headers === 'undefined') {
   // @ts-ignore
-  const Headers = require('fetch-headers');
+  const Headers = require('fetch-headers/headers-es5.min.js');
 }
 
 export namespace RestLink {
