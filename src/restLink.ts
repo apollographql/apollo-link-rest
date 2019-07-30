@@ -684,8 +684,10 @@ export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
     if (!current.forEach) {
       current = normalizeHeaders(current);
     }
-
+    
+    // @ts-ignore
     for (let key in current) {
+      // @ts-ignore
       accumulator.append(key, current[key]);
     }
 
