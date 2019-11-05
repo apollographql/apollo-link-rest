@@ -47,6 +47,7 @@ node -e "var package = require('./package.json'); \
 # Copy few more files to ./npm
 cp README.md npm/
 cp LICENSE npm/
+cp schema.graphql npm/
 
 echo "deploying to npm…"
 (cd npm && npm publish) || (>&2 echo "If this failed with ENEEDAUTH, remember that 'yarn deploy' won't work because yarn hot-patches npm's registry to yarn pkg.com")
