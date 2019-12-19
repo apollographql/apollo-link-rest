@@ -3630,7 +3630,7 @@ describe('export directive', () => {
       query userPostsWithTagDetails {
         user @rest(path: "/user") {
           id
-          posts {
+          posts @type(name: "Post") {
             id @export(as: "postId")
             tags {
               id @export(as: "tagId")
