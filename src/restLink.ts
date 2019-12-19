@@ -863,6 +863,7 @@ const resolver: Resolver = async (
   if (!isLeaf && isATypeCall) {
     // @type(name: ) is only supported inside apollo-link-rest at this time
     // so use the preAliasingNode as we're responsible for implementing aliasing!
+    // Also: exit early, since @type(name: ) && @rest() can't both exist on the same node.
     if (directives.rest) {
       throw new Error(
         'Invalid use of @type(name: ...) directive on a call that also has @rest(...)',
