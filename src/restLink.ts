@@ -869,7 +869,7 @@ const resolver: Resolver = async (
         'Invalid use of @type(name: ...) directive on a call that also has @rest(...)',
       );
     }
-    copyExportVariables(aliasedNode || preAliasingNode);
+    copyExportVariables(preAliasingNode);
     return addTypeToNode(preAliasingNode, directives.type.name);
   }
 
