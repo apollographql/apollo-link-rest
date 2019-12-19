@@ -869,7 +869,8 @@ const resolver: Resolver = async (
         'Invalid use of @type(name: ...) directive on a call that also has @rest(...)',
       );
     }
-    addTypeToNode(preAliasingNode, directives.type.name);
+    copyExportVariables(aliasedNode || preAliasingNode);
+    return addTypeToNode(preAliasingNode, directives.type.name);
   }
 
   const isNotARestCall = !directives || !directives.rest;
