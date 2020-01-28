@@ -13,7 +13,7 @@ import {
   Operation,
   NextLink,
   FetchResult,
-} from 'apollo-link';
+} from '@apollo/client/core';
 import {
   hasDirectives,
   getMainDefinition,
@@ -24,7 +24,7 @@ import {
   isField,
   isInlineFragment,
   resultKeyNameFromField,
-} from 'apollo-utilities';
+} from '@apollo/client/utilities';
 
 import { graphql } from 'graphql-anywhere/lib/async';
 import { Resolver, ExecInfo } from 'graphql-anywhere';

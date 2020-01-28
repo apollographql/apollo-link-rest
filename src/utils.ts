@@ -2,8 +2,10 @@
  * Adapted from apollo-link-state/utils.ts
  */
 import { DocumentNode, DirectiveNode } from 'graphql';
-
-import { checkDocument, removeDirectivesFromDocument } from 'apollo-utilities';
+import {
+  checkDocument,
+  removeDirectivesFromDocument,
+} from '@apollo/client/utilities';
 
 const connectionRemoveConfig = {
   test: (directive: DirectiveNode) => directive.name.value === 'rest',
