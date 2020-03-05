@@ -3697,7 +3697,7 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await makePromise<Result>(
+    const { data } = await toPromise<Result>(
       execute(link, {
         operationName: 'getPostWithCommentsAndDetails',
         query: getPostWithCommentsAndDetails,
