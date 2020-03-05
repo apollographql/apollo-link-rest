@@ -3669,6 +3669,47 @@ describe('export directive', () => {
       'this is tag details c',
     );
   });
+
+  it('can handle @exports nested within @type-patched nodes', async () => {
+    expect.assertions(1);
+    const link = new RestLink({ uri: '/api' });
+
+    const comments = [{ id: '1', comment: 'Me too!' }];
+    const post = { id: '1', title: 'Love apollo', comments };
+    fetchMock.get('/api/post/1', post);
+
+    const commentDetails = [{ id: '1', author: 'Joe', likes: 10 }];
+    fetchMock.get('/api/comment/1', commentDetails);
+
+    const getPostWithCommentsAndDetails = gql`
+      query getPostWithCommentsAndDetails {
+        post(id: "1") @rest(type: "Post", path: "/post/:id") {
+          id
+          comments @type(name: "Comment") {
+            id @export(as: "commentId")
+            details @rest(type: "CommentDetails", path: "/comment/:commentId") {
+              id
+              author
+              likes
+            }
+          }
+        }
+      }
+    `;
+
+    const { data } = await makePromise<Result>(
+      execute(link, {
+        operationName: 'getPostWithCommentsAndDetails',
+        query: getPostWithCommentsAndDetails,
+        variables: { id: '1' },
+      }),
+    );
+
+    expect(data.post.comments[0].details[0]).toEqual({
+      ...commentDetails[0],
+      __typename: 'CommentDetails',
+    });
+  });
 });
 
 describe('Apollo client integration', () => {
