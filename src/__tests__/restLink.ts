@@ -8,6 +8,7 @@ import {
   toPromise,
   gql,
   disableFragmentWarnings,
+  ApolloQueryResult,
 } from '@apollo/client/core';
 import { onError } from '@apollo/link-error';
 
@@ -240,6 +241,40 @@ describe('Configuration', async () => {
 
       expect(data.post.__typename).toBeDefined();
       expect(data.post.__typename).toEqual('Post');
+    });
+
+    it('should preserve ArrayBuffer type value when using fieldNameNormalizer', async () => {
+      expect.assertions(2);
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameNormalizer: camelCase,
+        responseTransformer: async res => {
+          const arrayBuffer = await res.arrayBuffer();
+          return { Data: arrayBuffer };
+        },
+      });
+
+      const arrayBuffer = new ArrayBuffer(1);
+      fetchMock.get('/api/post/1', arrayBuffer);
+
+      const postAndTags = gql`
+        query postAndTags {
+          post @rest(type: "Post", path: "/post/1") {
+            __typename
+            data
+          }
+        }
+      `;
+
+      const { data } = await toPromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postAndTags,
+        }),
+      );
+
+      expect(data.post.data).toBeDefined();
+      expect(data.post.data).not.toEqual({});
     });
   });
 
@@ -1549,7 +1584,7 @@ describe('Use a custom pathBuilder', () => {
       link,
     });
 
-    const { data: data1b }: { data: any } = await client.query({
+    const { data: data1b }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
       variables: {
         status: 'published',
@@ -1560,7 +1595,7 @@ describe('Use a custom pathBuilder', () => {
       posts: [{ ...posts1[0], __typename: 'Post' }],
     });
 
-    const { data: data2b }: { data: any } = await client.query({
+    const { data: data2b }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
       variables: {
         otherStatus: 'published',
@@ -3739,7 +3774,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data }: { data: any } = await client.query({
+    const { data }: ApolloQueryResult<any> = await client.query({
       query: postTagExport,
     });
 
@@ -3818,7 +3853,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data: data2 }: { data: any } = await client.query({
+    const { data: data2 }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
     });
     expect(data2.post.unfairCriticism).toBeNull();
