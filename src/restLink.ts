@@ -1183,6 +1183,8 @@ export class RestLink extends ApolloLink {
 
     if (typePatcher == null) {
       this.typePatcher = (result, __typename, _2) => {
+        if (!Object.keys(result).length) return null;
+
         return { __typename, ...result };
       };
     } else if (
@@ -1202,6 +1204,8 @@ export class RestLink extends ApolloLink {
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
       ) => {
+        if (!Object.keys(data).length) return null;
+
         const __typename = data.__typename || outerType;
         if (Array.isArray(data)) {
           return data.map(d => patchDeeper(d, __typename, patchDeeper));
