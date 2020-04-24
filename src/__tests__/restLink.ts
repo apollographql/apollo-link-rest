@@ -2579,8 +2579,6 @@ describe('Mutation', () => {
     });
 
     it.only('returns null on empty object response without typePatcher', async () => {
-      // In truth this test is just for show, because the fetch implementation
-      // used in the tests already returns {} from res.json() for 204 responses
       expect.assertions(1);
 
       const link = new RestLink({ uri: '/api' });
@@ -2608,8 +2606,6 @@ describe('Mutation', () => {
     });
 
     it.only('returns null on empty object response with typePatcher', async () => {
-      // In truth this test is just for show, because the fetch implementation
-      // used in the tests already returns {} from res.json() for 204 responses
       expect.assertions(1);
 
       const link = new RestLink({
