@@ -2578,6 +2578,65 @@ describe('Mutation', () => {
       });
     });
 
+    it.only('returns null on empty object response without typePatcher', async () => {
+      // In truth this test is just for show, because the fetch implementation
+      // used in the tests already returns {} from res.json() for 204 responses
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts', {
+        status: 204,
+        body: {},
+      });
+
+      const createPostMutation = gql`
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input) @rest(path: "/posts", method: "POST")
+        }
+      `;
+      const response = await toPromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
+      );
+
+      expect(response.data.publishedPost).toEqual(null);
+    });
+
+    it.only('returns null on empty object response with typePatcher', async () => {
+      // In truth this test is just for show, because the fetch implementation
+      // used in the tests already returns {} from res.json() for 204 responses
+      expect.assertions(1);
+
+      const link = new RestLink({
+        uri: '/api',
+        typePatcher: { Post: data => data },
+      });
+
+      const post = { id: '1', title: 'Love apollo' };
+
+      fetchMock.post('/api/posts', { status: 204, body: {} });
+
+      const createPostMutation = gql`
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input) @rest(path: "/posts", method: "POST")
+        }
+      `;
+      const response = await toPromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
+      );
+
+      expect(response.data.publishedPost).toEqual(null);
+    });
+
     it('returns an empty object on successful posts with zero Content-Length', async () => {
       // In Node.js parsing an empty body doesn't throw an error, so the best test is
       // to provide body data and ensure the zero length still triggers the empty response
