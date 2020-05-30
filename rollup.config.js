@@ -2,12 +2,9 @@ import resolve from 'rollup-plugin-local-resolve';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 
 const globals = {
-  'apollo-cache': 'apolloCache.core',
-  'apollo-cache-inmemory': 'apolloCache.inmemory',
-  'apollo-client': 'apollo.core',
-  'apollo-link': 'apolloLink.core',
-  'apollo-link-error': 'apolloLink.error',
-  'apollo-utilities': 'apollo.utilities',
+  '@apollo/client/core': 'apolloClient.core',
+  '@apollo/client/utilities': 'apolloClient.utilities',
+  '@apollo/link-error': 'apolloLink.error',
   'graphql-anywhere': 'graphqlAnywhere',
   'graphql-anywhere/lib/async': 'graphqlAnywhere.async',
 };

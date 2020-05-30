@@ -12,10 +12,10 @@ An Apollo Link to easily try out GraphQL without a full server. It can be used t
 ## Installation
 
 ```bash
-npm install apollo-link-rest apollo-link graphql graphql-anywhere --save # or `yarn add apollo-link-rest apollo-link graphql graphql-anywhere`
+npm install apollo-link-rest apollo-link graphql graphql-anywhere qs --save # or `yarn add apollo-link-rest apollo-link graphql graphql-anywhere qs`
 ```
 
-`apollo-link`, `graphql` and `graphql-anywhere` are peer dependencies needed by `apollo-link-rest`.
+`apollo-link`, `graphql`, `qs` and `graphql-anywhere` are peer dependencies needed by `apollo-link-rest`.
 
 ## Usage
 
@@ -49,7 +49,7 @@ const query = gql`
 
 // Invoke the query and log the person's name
 client.query({ query }).then(response => {
-  console.log(response.data.name);
+  console.log(response.data.person.name);
 });
 ```
 
@@ -110,3 +110,9 @@ npm link
 # in the project you want to run this in
 npm link apollo-link-rest
 ```
+
+## Related Libraries
+
+- [JSON API Link](https://github.com/Rsullivan00/apollo-link-json-api/) provides
+tooling for using GraphQL with JSON API compliant APIs.
+- [apollo-type-patcher](https://github.com/mpgon/apollo-type-patcher) declarative type definitions for your REST API with zero dependencies. 

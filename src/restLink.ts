@@ -4,6 +4,7 @@ import {
   FragmentDefinitionNode,
   // Query Nodes
   DirectiveNode,
+  DocumentNode,
   FieldNode,
   SelectionSetNode,
 } from 'graphql';
@@ -13,7 +14,7 @@ import {
   Operation,
   NextLink,
   FetchResult,
-} from 'apollo-link';
+} from '@apollo/client/core';
 import {
   hasDirectives,
   getMainDefinition,
@@ -24,13 +25,14 @@ import {
   isField,
   isInlineFragment,
   resultKeyNameFromField,
-} from 'apollo-utilities';
+  checkDocument,
+  removeDirectivesFromDocument,
+} from '@apollo/client/utilities';
 
 import { graphql } from 'graphql-anywhere/lib/async';
 import { Resolver, ExecInfo } from 'graphql-anywhere';
 
 import * as qs from 'qs';
-import { removeRestSetsFromDocument } from './utils';
 
 export namespace RestLink {
   export type URI = string;
@@ -164,7 +166,7 @@ export namespace RestLink {
     /**
      * The credentials policy you want to use for the fetch call.
      */
-    credentials?: RequestCredentials;
+    credentials?: 'omit' | 'same-origin' | 'include';
 
     /**
      * Use a custom fetch to handle REST calls.
@@ -618,6 +620,16 @@ const convertObjectKeys = (
     return object;
   }
 
+  // FileList/File are only available in some browser contexts
+  // Notably: *not available* in react-native.
+  if (
+    ((global as any).FileList && object instanceof FileList) ||
+    ((global as any).File && object instanceof File)
+  ) {
+    // Object is a FileList or File object => no keys to convert!
+    return object;
+  }
+
   if (Array.isArray(object)) {
     return object.map((o, index) =>
       convertObjectKeys(o, converter, [...keypath, String(index)]),
@@ -787,8 +799,8 @@ interface RequestContext {
   /** Credentials Policy for Fetch */
   credentials?: RequestCredentials | null;
 
-  /** Exported variables fulfilled in this request, using @export(as:) */
-  exportVariables: { [key: string]: any };
+  /** Exported variables fulfilled in this request, using @export(as:). They are stored keyed by node to support deeply nested structures with exports at multiple levels */
+  exportVariablesByNode: Map<any, { [key: string]: any }>;
 
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
@@ -828,7 +840,21 @@ const resolver: Resolver = async (
   info: ExecInfo,
 ) => {
   const { directives, isLeaf, resultKey } = info;
-  const { exportVariables } = context;
+  const { exportVariablesByNode } = context;
+
+  const exportVariables = exportVariablesByNode.get(root) || {};
+
+  /** creates a copy of this node's export variables for its child nodes. iterates over array results to provide for each child. returns the passed result. */
+  const copyExportVariables = <T>(result: T): T => {
+    if (result instanceof Array) {
+      result.forEach(copyExportVariables);
+    } else {
+      // export variables are stored keyed on the node they are for
+      exportVariablesByNode.set(result, { ...exportVariables });
+    }
+
+    return result;
+  };
 
   // Support GraphQL Aliases!
   const aliasedNode = (root || {})[resultKey];
@@ -851,6 +877,7 @@ const resolver: Resolver = async (
         'Invalid use of @type(name: ...) directive on a call that also has @rest(...)',
       );
     }
+    copyExportVariables(preAliasingNode);
     return addTypeToNode(preAliasingNode, directives.type.name);
   }
 
@@ -858,7 +885,7 @@ const resolver: Resolver = async (
   if (isNotARestCall) {
     // This is not tagged with @rest()
     // This might not belong to us so return the aliasNode version preferentially
-    return aliasedNode || preAliasingNode;
+    return copyExportVariables(aliasedNode || preAliasingNode);
   }
   const {
     credentials,
@@ -1077,7 +1104,8 @@ const resolver: Resolver = async (
     mainDefinition.selectionSet,
   );
 
-  return addTypeNameToResult(result, type, typePatcher);
+  result = addTypeNameToResult(result, type, typePatcher);
+  return copyExportVariables(result);
 };
 
 /**
@@ -1094,11 +1122,18 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
   data: any,
   headers: Headers,
 ) => {
-  headers.append('Content-Type', 'application/json');
+  if (!headers.has('content-type')) {
+    headers.append('Content-Type', 'application/json');
+  }
   return {
     body: JSON.stringify(data),
     headers: headers,
   };
+};
+
+const CONNECTION_REMOVE_CONFIG = {
+  test: (directive: DirectiveNode) => directive.name.value === 'rest',
+  remove: true,
 };
 
 /**
@@ -1114,6 +1149,7 @@ export class RestLink extends ApolloLink {
   private readonly customFetch: RestLink.CustomFetch;
   private readonly serializers: RestLink.Serializers;
   private readonly responseTransformer: RestLink.ResponseTransformer;
+  private readonly processedDocuments: Map<DocumentNode, DocumentNode>;
 
   constructor({
     uri,
@@ -1210,6 +1246,22 @@ export class RestLink extends ApolloLink {
       [DEFAULT_SERIALIZER_KEY]: defaultSerializer || DEFAULT_JSON_SERIALIZER,
       ...(bodySerializers || {}),
     };
+    this.processedDocuments = new Map();
+  }
+
+  private removeRestSetsFromDocument(query: DocumentNode): DocumentNode {
+    const cached = this.processedDocuments.get(query);
+    if (cached) return cached;
+
+    checkDocument(query);
+
+    const docClone = removeDirectivesFromDocument(
+      [CONNECTION_REMOVE_CONFIG],
+      query,
+    );
+
+    this.processedDocuments.set(query, docClone);
+    return docClone;
   }
 
   public request(
@@ -1223,7 +1275,7 @@ export class RestLink extends ApolloLink {
       return forward(operation);
     }
 
-    const nonRest = removeRestSetsFromDocument(query);
+    const nonRest = this.removeRestSetsFromDocument(query);
 
     // 1. Use the user's merge policy if any
     let headersMergePolicy: RestLink.HeadersMergePolicy =
@@ -1262,8 +1314,8 @@ export class RestLink extends ApolloLink {
     const requestContext: RequestContext = {
       headers,
       endpoints: this.endpoints,
-      // Provide an empty hash for this request's exports to be stuffed into
-      exportVariables: {},
+      // Provide an empty map for this request's exports to be stuffed into
+      exportVariablesByNode: new Map(),
       credentials,
       customFetch: this.customFetch,
       operationType,
