@@ -2809,7 +2809,7 @@ describe('Mutation', () => {
         expect.objectContaining(resultPost),
       );
     });
-    it('corrects names to snake_case for request-level normalizer', async () => {
+    it('corrects names to camelCase for request-level normalizer', async () => {
       expect.assertions(3);
 
       const link = new RestLink({
