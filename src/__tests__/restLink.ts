@@ -8,6 +8,7 @@ import {
   toPromise,
   gql,
   disableFragmentWarnings,
+  ApolloQueryResult,
 } from '@apollo/client/core';
 import { onError } from '@apollo/link-error';
 
@@ -1605,7 +1606,7 @@ describe('Use a custom pathBuilder', () => {
       link,
     });
 
-    const { data: data1b }: { data: any } = await client.query({
+    const { data: data1b }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
       variables: {
         status: 'published',
@@ -1616,7 +1617,7 @@ describe('Use a custom pathBuilder', () => {
       posts: [{ ...posts1[0], __typename: 'Post' }],
     });
 
-    const { data: data2b }: { data: any } = await client.query({
+    const { data: data2b }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
       variables: {
         otherStatus: 'published',
@@ -3795,7 +3796,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data }: { data: any } = await client.query({
+    const { data }: ApolloQueryResult<any> = await client.query({
       query: postTagExport,
     });
 
@@ -3874,7 +3875,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data: data2 }: { data: any } = await client.query({
+    const { data: data2 }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
     });
     expect(data2.post.unfairCriticism).toBeNull();
