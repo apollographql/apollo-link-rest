@@ -247,6 +247,12 @@ export namespace RestLink {
      */
     fieldNameDenormalizer?: RestLink.FieldNameNormalizer;
     /**
+     * A per-request name normalizer, this permits special endpoints to have their
+     * field names remapped differently from the default.
+     * @default Uses RestLink.fieldNameDenormalizer
+     */
+    fieldNameNormalizer?: RestLink.FieldNameNormalizer;
+    /**
      * A method to allow insertion of __typename deep in response objects
      */
     typePatcher?: RestLink.FunctionalTypePatcher;
@@ -863,7 +869,7 @@ const resolver: Resolver = async (
     typePatcher,
     mainDefinition,
     fragmentDefinitions,
-    fieldNameNormalizer,
+    fieldNameNormalizer: linkLevelNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
     responseTransformer,
@@ -933,6 +939,7 @@ const resolver: Resolver = async (
     bodyBuilder,
     bodyKey,
     fieldNameDenormalizer: perRequestNameDenormalizer,
+    fieldNameNormalizer: perRequestNameNormalizer,
     bodySerializer,
   } = directives.rest as RestLink.DirectiveOptions;
   if (!method) {
@@ -1044,6 +1051,7 @@ const resolver: Resolver = async (
   }
 
   const transformer = endpointOption.responseTransformer || responseTransformer;
+
   if (transformer) {
     // A responseTransformer might call something else than json() on the response.
     try {
@@ -1056,9 +1064,10 @@ const resolver: Resolver = async (
     result = await result.json();
   }
 
-  if (fieldNameNormalizer !== null) {
-    result = convertObjectKeys(result, fieldNameNormalizer);
-  }
+  result = convertObjectKeys(
+    result,
+    perRequestNameNormalizer || linkLevelNameNormalizer || noOpNameNormalizer,
+  );
 
   result = findRestDirectivesThenInsertNullsForOmittedFields(
     resultKey,

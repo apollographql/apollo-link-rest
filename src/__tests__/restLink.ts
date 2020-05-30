@@ -2804,6 +2804,62 @@ describe('Mutation', () => {
         expect.objectContaining(resultPost),
       );
     });
+    it('corrects names to snake_case for request-level normalizer', async () => {
+      expect.assertions(3);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameDenormalizer: snake_case,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.post('/api/posts/new', { id: 1, ...snakePost });
+      const intermediatePost = snakePost;
+      const resultPost = { ...camelPost, id: 1 };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          titleString: String
+          categoryId: Int
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              fieldNameNormalizer: $requestLevelNormalizer
+            ) {
+            id
+            titleString
+            categoryId
+          }
+        }
+      `;
+      const response = await makePromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: camelPost, requestLevelNormalizer: camelCase },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
+      );
+    });
   });
   describe('bodyKey/bodyBuilder', () => {
     afterEach(() => {
