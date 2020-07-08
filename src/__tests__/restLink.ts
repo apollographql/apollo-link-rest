@@ -323,12 +323,13 @@ describe('Complex responses need nested __typename insertions', () => {
       key: string,
       __typename: string,
       patcher: RestLink.FunctionalTypePatcher,
+      context: RestLink.TypePatcherContext,
     ) => {
       const value = data[key];
       if (value == null) {
         return {};
       }
-      const result = { [key]: patcher(value, __typename, patcher) };
+      const result = { [key]: patcher(value, __typename, patcher, context) };
       return result;
     };
     const typePatcher: RestLink.TypePatcherTable = {
@@ -336,6 +337,7 @@ describe('Complex responses need nested __typename insertions', () => {
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
@@ -343,33 +345,42 @@ describe('Complex responses need nested __typename insertions', () => {
 
         return {
           ...obj,
-          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper, context),
           ...patchIfExists(
             obj,
             'simpleDoubleNesting',
             'SimpleDoubleNesting',
             patchDeeper,
+            context,
           ),
-          ...patchIfExists(obj, 'nestedArrays', 'NestedArrays', patchDeeper),
+          ...patchIfExists(
+            obj,
+            'nestedArrays',
+            'NestedArrays',
+            patchDeeper,
+            context,
+          ),
         };
       },
       Inner1: (
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
         }
         return {
           ...obj,
-          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper),
+          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper, context),
         };
       },
       SimpleDoubleNesting: (
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
@@ -377,13 +388,14 @@ describe('Complex responses need nested __typename insertions', () => {
 
         return {
           ...obj,
-          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper, context),
         };
       },
       NestedArrays: (
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
@@ -396,12 +408,14 @@ describe('Complex responses need nested __typename insertions', () => {
             'singlyArray',
             'SinglyNestedArrayEntry',
             patchDeeper,
+            context,
           ),
           ...patchIfExists(
             obj,
             'doublyNestedArray',
             'DoublyNestedArrayEntry',
             patchDeeper,
+            context,
           ),
         };
       },
@@ -602,12 +616,13 @@ describe('Complex responses need nested __typename insertions', () => {
       key: string,
       __typename: string,
       patcher: RestLink.FunctionalTypePatcher,
+      context: RestLink.TypePatcherContext,
     ) => {
       const value = data[key];
       if (value == null) {
         return {};
       }
-      const result = { [key]: patcher(value, __typename, patcher) };
+      const result = { [key]: patcher(value, __typename, patcher, context) };
       return result;
     };
     const typePatcher: RestLink.TypePatcherTable = {
@@ -615,6 +630,7 @@ describe('Complex responses need nested __typename insertions', () => {
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
@@ -622,33 +638,42 @@ describe('Complex responses need nested __typename insertions', () => {
 
         return {
           ...obj,
-          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper, context),
           ...patchIfExists(
             obj,
             'simpleDoubleNesting',
             'SimpleDoubleNesting',
             patchDeeper,
+            context,
           ),
-          ...patchIfExists(obj, 'nestedArrays', 'NestedArrays', patchDeeper),
+          ...patchIfExists(
+            obj,
+            'nestedArrays',
+            'NestedArrays',
+            patchDeeper,
+            context,
+          ),
         };
       },
       Inner1: (
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
         }
         return {
           ...obj,
-          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper),
+          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper, context),
         };
       },
       SimpleDoubleNesting: (
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
@@ -656,13 +681,14 @@ describe('Complex responses need nested __typename insertions', () => {
 
         return {
           ...obj,
-          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper),
+          ...patchIfExists(obj, 'inner1', 'Inner1', patchDeeper, context),
         };
       },
       NestedArrays: (
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
@@ -675,12 +701,14 @@ describe('Complex responses need nested __typename insertions', () => {
             'singlyArray',
             'SinglyNestedArrayEntry',
             patchDeeper,
+            context,
           ),
           ...patchIfExists(
             obj,
             'doublyNestedArray',
             'DoublyNestedArrayEntry',
             patchDeeper,
+            context,
           ),
         };
       },
@@ -688,13 +716,14 @@ describe('Complex responses need nested __typename insertions', () => {
         obj: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         if (obj == null) {
           return obj;
         }
         return {
           ...obj,
-          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper),
+          ...patchIfExists(obj, 'reused', 'Reused', patchDeeper, context),
         };
       },
     };
@@ -1549,7 +1578,7 @@ describe('Use a custom pathBuilder', () => {
       link,
     });
 
-    const { data: data1b }: { data: any } = await client.query({
+    const { data: data1b }: { data?: any } = await client.query({
       query: postTitleQuery,
       variables: {
         status: 'published',
@@ -1560,7 +1589,7 @@ describe('Use a custom pathBuilder', () => {
       posts: [{ ...posts1[0], __typename: 'Post' }],
     });
 
-    const { data: data2b }: { data: any } = await client.query({
+    const { data: data2b }: { data?: any } = await client.query({
       query: postTitleQuery,
       variables: {
         otherStatus: 'published',
@@ -3739,7 +3768,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data }: { data: any } = await client.query({
+    const { data }: { data?: any } = await client.query({
       query: postTagExport,
     });
 
@@ -3818,7 +3847,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data: data2 }: { data: any } = await client.query({
+    const { data: data2 }: { data?: any } = await client.query({
       query: postTitleQuery,
     });
     expect(data2.post.unfairCriticism).toBeNull();
@@ -3838,6 +3867,7 @@ describe('Apollo client integration', () => {
             data: any,
             outerType: string,
             patchDeeper: RestLink.FunctionalTypePatcher,
+            context: RestLink.TypePatcherContext,
           ): any => {
             // Let's make unfairCriticism a Required Field
             if (data.unfairCriticism == null) {
