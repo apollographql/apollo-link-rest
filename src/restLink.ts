@@ -1047,10 +1047,6 @@ const resolver: Resolver = async (
     } else {
       result = response;
     }
-  } else if (response.status === 404) {
-    // In a GraphQL context a missing resource should be indicated by
-    // a null value rather than throwing a network error
-    result = null;
   } else {
     // Default error handling:
     // Throw a JSError, that will be available under the
