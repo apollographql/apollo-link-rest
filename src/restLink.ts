@@ -609,7 +609,17 @@ const convertObjectKeys = (
     converter = __converter;
   }
 
-  if (object == null || typeof object !== 'object') {
+  if (Array.isArray(object)) {
+    return object.map((o, index) =>
+      convertObjectKeys(o, converter, [...keypath, String(index)]),
+    );
+  }
+
+  if (
+    object == null ||
+    typeof object !== 'object' ||
+    object.constructor !== Object
+  ) {
     // Object is a scalar or null / undefined => no keys to convert!
     return object;
   }
@@ -622,12 +632,6 @@ const convertObjectKeys = (
   ) {
     // Object is a FileList or File object => no keys to convert!
     return object;
-  }
-
-  if (Array.isArray(object)) {
-    return object.map((o, index) =>
-      convertObjectKeys(o, converter, [...keypath, String(index)]),
-    );
   }
 
   return Object.keys(object).reduce((acc: any, key: string) => {
