@@ -594,7 +594,7 @@ mutation encryptedPost(
 ##### `bodySerializer`
 
 If you need to serialize your data differently (say as form-encoded), you can provide a `bodySerializer` instead of relying on the default JSON serialization.
-`bodySerializer` can be either a function of the form `(data: any, headers: Headers) => {body: any, header: Headers}` or a string key. When using the string key
+`bodySerializer` can be either a function of the form `(data: any, headers: Headers) => {body: any, headers: Headers}` or a string key. When using the string key
 `RestLink` will instead use the corresponding serializer from the `bodySerializers` object that can optionally be passed in during initialization.
 
 ```graphql
