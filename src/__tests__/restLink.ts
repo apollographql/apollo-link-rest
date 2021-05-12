@@ -8,6 +8,7 @@ import {
   toPromise,
   gql,
   disableFragmentWarnings,
+  ApolloQueryResult,
 } from '@apollo/client/core';
 import { onError } from '@apollo/link-error';
 
@@ -240,6 +241,62 @@ describe('Configuration', async () => {
 
       expect(data.post.__typename).toBeDefined();
       expect(data.post.__typename).toEqual('Post');
+    });
+    it('corrects names to camelCase for request-level normalizer', async () => {
+      expect.assertions(3);
+
+      const link = new RestLink({
+        uri: '/api',
+        fieldNameDenormalizer: snake_case,
+      });
+
+      // the id in this hash simulates the server *assigning* an id for the new post
+      const snakePost = { title_string: 'Love apollo', category_id: 6 };
+      const camelPost = { titleString: 'Love apollo', categoryId: 6 };
+      fetchMock.post('/api/posts/new', { id: 1, ...snakePost });
+      const intermediatePost = snakePost;
+      const resultPost = { ...camelPost, id: 1 };
+
+      const createPostMutation = gql`
+        fragment PublishablePostInput on REST {
+          titleString: String
+          categoryId: Int
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(
+              type: "Post"
+              path: "/posts/new"
+              method: "POST"
+              fieldNameNormalizer: $requestLevelNormalizer
+            ) {
+            id
+            titleString
+            categoryId
+          }
+        }
+      `;
+      const response = await toPromise<Result>(
+        execute(link, {
+          operationName: 'publishPost',
+          query: createPostMutation,
+          variables: { input: camelPost, requestLevelNormalizer: camelCase },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/posts/new')[0];
+
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      );
+      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+
+      expect(response.data.publishedPost).toEqual(
+        expect.objectContaining(resultPost),
+      );
     });
   });
 
@@ -1549,7 +1606,7 @@ describe('Use a custom pathBuilder', () => {
       link,
     });
 
-    const { data: data1b }: { data: any } = await client.query({
+    const { data: data1b }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
       variables: {
         status: 'published',
@@ -1560,7 +1617,7 @@ describe('Use a custom pathBuilder', () => {
       posts: [{ ...posts1[0], __typename: 'Post' }],
     });
 
-    const { data: data2b }: { data: any } = await client.query({
+    const { data: data2b }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
       variables: {
         otherStatus: 'published',
@@ -3739,7 +3796,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data }: { data: any } = await client.query({
+    const { data }: ApolloQueryResult<any> = await client.query({
       query: postTagExport,
     });
 
@@ -3818,7 +3875,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data: data2 }: { data: any } = await client.query({
+    const { data: data2 }: ApolloQueryResult<any> = await client.query({
       query: postTitleQuery,
     });
     expect(data2.post.unfairCriticism).toBeNull();
