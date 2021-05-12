@@ -42,6 +42,8 @@ export namespace RestLink {
   export interface EndpointOptions {
     uri: Endpoint;
     responseTransformer?: ResponseTransformer | null;
+    fieldNameNormalizer?: FieldNameNormalizer;
+    fieldNameDenormalizer?: FieldNameNormalizer;
   }
 
   export interface Endpoints {
@@ -994,6 +996,7 @@ const resolver: Resolver = async (
     body = convertObjectKeys(
       bodyBuilder(allParams),
       perRequestNameDenormalizer ||
+        endpointOption.fieldNameDenormalizer ||
         linkLevelNameDenormalizer ||
         noOpNameNormalizer,
     );
@@ -1083,8 +1086,9 @@ const resolver: Resolver = async (
     result = await result.json();
   }
 
-  if (fieldNameNormalizer !== null) {
-    result = convertObjectKeys(result, fieldNameNormalizer);
+  const normalizer = endpointOption.fieldNameNormalizer || fieldNameNormalizer;
+  if (normalizer !== null) {
+    result = convertObjectKeys(result, normalizer);
   }
 
   result = findRestDirectivesThenInsertNullsForOmittedFields(
