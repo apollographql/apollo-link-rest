@@ -7,7 +7,7 @@ import Person from './Person';
 import './App.css';
 
 const restLink = new RestLink({
-  uri: 'https://swapi.co/api/',
+  uri: 'https://swapi.dev/api/',
 });
 
 const client = new ApolloClient({
