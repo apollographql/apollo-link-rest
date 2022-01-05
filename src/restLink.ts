@@ -60,9 +60,24 @@ export namespace RestLink {
     (fieldName: string, keypath?: string[]): string;
   }
 
+  export interface TypePatcherContext {
+    resolverParams: {
+      fieldName: string;
+      root: any;
+      args: any;
+      context: RequestContext;
+      info: ExecInfo;
+    };
+  }
+
   /** injects __typename using user-supplied code */
   export interface FunctionalTypePatcher {
-    (data: any, outerType: string, patchDeeper: FunctionalTypePatcher): any;
+    (
+      data: any,
+      outerType: string,
+      patchDeeper: FunctionalTypePatcher,
+      context: TypePatcherContext,
+    ): any;
   }
   /** Table of mappers that help inject __typename per type described therein */
   export interface TypePatcherTable {
@@ -278,11 +293,14 @@ const addTypeNameToResult = (
   result: any[] | object,
   __typename: string,
   typePatcher: RestLink.FunctionalTypePatcher,
+  typePatcherContext: RestLink.TypePatcherContext,
 ): any[] | object => {
   if (Array.isArray(result)) {
     const fixedTypename = popOneSetOfArrayBracketsFromTypeName(__typename);
     // Recursion needed for multi-dimensional arrays
-    return result.map(e => addTypeNameToResult(e, fixedTypename, typePatcher));
+    return result.map(e =>
+      addTypeNameToResult(e, fixedTypename, typePatcher, typePatcherContext),
+    );
   }
   if (
     null == result ||
@@ -292,7 +310,7 @@ const addTypeNameToResult = (
   ) {
     return result;
   }
-  return typePatcher(result, __typename, typePatcher);
+  return typePatcher(result, __typename, typePatcher, typePatcherContext);
 };
 
 const quickFindRestDirective = (field: FieldNode): DirectiveNode | null => {
@@ -1104,7 +1122,9 @@ const resolver: Resolver = async (
     mainDefinition.selectionSet,
   );
 
-  result = addTypeNameToResult(result, type, typePatcher);
+  result = addTypeNameToResult(result, type, typePatcher, {
+    resolverParams: { fieldName, root, args, context, info },
+  });
   return copyExportVariables(result);
 };
 
@@ -1210,15 +1230,18 @@ export class RestLink extends ApolloLink {
         data: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         const __typename = data.__typename || outerType;
         if (Array.isArray(data)) {
-          return data.map(d => patchDeeper(d, __typename, patchDeeper));
+          return data.map(d =>
+            patchDeeper(d, __typename, patchDeeper, context),
+          );
         }
         const subPatcher = table[__typename] || (result => result);
         return {
           __typename,
-          ...subPatcher(data, __typename, patchDeeper),
+          ...subPatcher(data, __typename, patchDeeper, context),
         };
       };
     } else {

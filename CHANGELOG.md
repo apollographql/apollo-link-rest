@@ -4,6 +4,8 @@
 
 ### v0.next
 
+* Feature: Pass context to typePatcher to make it possible to extract args from the URL for use when patching [#260](https://github.com/apollographql/apollo-link-rest/pull/260) [#261](https://github.com/apollographql/apollo-link-rest/pull/261)
+
 ### v0.7.3
 
 * Fix: Nested `@rest(…)` calls with nested `@export(as:…)` directives should keep their contexts distinct in order to work. [#204](https://github.com/apollographql/apollo-link-rest/pull/204)
