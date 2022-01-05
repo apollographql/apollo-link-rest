@@ -618,6 +618,9 @@ function PathBuilderLookupValue(tmp: object, keyPath: string[]) {
  */
 const noMangleKeys = ['__typename'];
 
+/** Trivial globalThis polyfill that falls-back to our previous global object in case people had polyfilled that */
+const globalScope = (typeof globalThis === 'object' && globalThis) || global;
+
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
   object: object,
@@ -651,8 +654,8 @@ const convertObjectKeys = (
   // FileList/File are only available in some browser contexts
   // Notably: *not available* in react-native.
   if (
-    ((globalThis as any).FileList && object instanceof FileList) ||
-    ((globalThis as any).File && object instanceof File)
+    ((globalScope as any).FileList && object instanceof FileList) ||
+    ((globalScope as any).File && object instanceof File)
   ) {
     // Object is a FileList or File object => no keys to convert!
     return object;
