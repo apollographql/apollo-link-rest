@@ -617,8 +617,8 @@ const convertObjectKeys = (
   // FileList/File are only available in some browser contexts
   // Notably: *not available* in react-native.
   if (
-    ((window as any).FileList && object instanceof FileList) ||
-    ((window as any).File && object instanceof File)
+    ((globalThis as any).FileList && object instanceof FileList) ||
+    ((globalThis as any).File && object instanceof File)
   ) {
     // Object is a FileList or File object => no keys to convert!
     return object;
