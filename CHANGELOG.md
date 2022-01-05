@@ -4,6 +4,23 @@
 
 ### v0.next
 
+* Feature: Pass context to typePatcher to make it possible to extract args from the URL for use when patching [#260](https://github.com/apollographql/apollo-link-rest/pull/260) [#261](https://github.com/apollographql/apollo-link-rest/pull/261)
+* Feature: Allow per-request field-name normalization for symmetry with de-normalization [#253](https://github.com/apollographql/apollo-link-rest/pull/253)
+* Fix: fieldNameNormalizer mangling ArrayBuffer/Blob types [#247](https://github.com/apollographql/apollo-link-rest/pull/247)
+
+### v0.8.0
+
+In beta for a unreasonably long time, this release has been stable (in-beta) for 2 years now!! It's about time we officially tag the stable version.
+
+The main breaking change is that you need to be running Apollo Client >= 3.
+
+A list of some specific relevant PRs:
+
+* [#241](https://github.com/apollographql/apollo-link-rest/pull/241)
+* [#239](https://github.com/apollographql/apollo-link-rest/pull/239)
+* [#228](https://github.com/apollographql/apollo-link-rest/pull/228)
+* [#209](https://github.com/apollographql/apollo-link-rest/pull/209)
+
 ### v0.7.3
 
 * Fix: Nested `@rest(…)` calls with nested `@export(as:…)` directives should keep their contexts distinct in order to work. [#204](https://github.com/apollographql/apollo-link-rest/pull/204)
