@@ -60,9 +60,24 @@ export namespace RestLink {
     (fieldName: string, keypath?: string[]): string;
   }
 
+  export interface TypePatcherContext {
+    resolverParams: {
+      fieldName: string;
+      root: any;
+      args: any;
+      context: RequestContext;
+      info: ExecInfo;
+    };
+  }
+
   /** injects __typename using user-supplied code */
   export interface FunctionalTypePatcher {
-    (data: any, outerType: string, patchDeeper: FunctionalTypePatcher): any;
+    (
+      data: any,
+      outerType: string,
+      patchDeeper: FunctionalTypePatcher,
+      context: TypePatcherContext,
+    ): any;
   }
   /** Table of mappers that help inject __typename per type described therein */
   export interface TypePatcherTable {
@@ -249,6 +264,12 @@ export namespace RestLink {
      */
     fieldNameDenormalizer?: RestLink.FieldNameNormalizer;
     /**
+     * A per-request name normalizer, this permits special endpoints to have their
+     * field names remapped differently from the default.
+     * @default Uses RestLink.fieldNameDenormalizer
+     */
+    fieldNameNormalizer?: RestLink.FieldNameNormalizer;
+    /**
      * A method to allow insertion of __typename deep in response objects
      */
     typePatcher?: RestLink.FunctionalTypePatcher;
@@ -272,11 +293,14 @@ const addTypeNameToResult = (
   result: any[] | object,
   __typename: string,
   typePatcher: RestLink.FunctionalTypePatcher,
+  typePatcherContext: RestLink.TypePatcherContext,
 ): any[] | object => {
   if (Array.isArray(result)) {
     const fixedTypename = popOneSetOfArrayBracketsFromTypeName(__typename);
     // Recursion needed for multi-dimensional arrays
-    return result.map(e => addTypeNameToResult(e, fixedTypename, typePatcher));
+    return result.map(e =>
+      addTypeNameToResult(e, fixedTypename, typePatcher, typePatcherContext),
+    );
   }
   if (
     null == result ||
@@ -286,7 +310,7 @@ const addTypeNameToResult = (
   ) {
     return result;
   }
-  return typePatcher(result, __typename, typePatcher);
+  return typePatcher(result, __typename, typePatcher, typePatcherContext);
 };
 
 const quickFindRestDirective = (field: FieldNode): DirectiveNode | null => {
@@ -894,7 +918,7 @@ const resolver: Resolver = async (
     typePatcher,
     mainDefinition,
     fragmentDefinitions,
-    fieldNameNormalizer,
+    fieldNameNormalizer: linkLevelNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
     responseTransformer,
@@ -964,6 +988,7 @@ const resolver: Resolver = async (
     bodyBuilder,
     bodyKey,
     fieldNameDenormalizer: perRequestNameDenormalizer,
+    fieldNameNormalizer: perRequestNameNormalizer,
     bodySerializer,
   } = directives.rest as RestLink.DirectiveOptions;
   if (!method) {
@@ -1075,6 +1100,7 @@ const resolver: Resolver = async (
   }
 
   const transformer = endpointOption.responseTransformer || responseTransformer;
+
   if (transformer) {
     // A responseTransformer might call something else than json() on the response.
     try {
@@ -1087,9 +1113,10 @@ const resolver: Resolver = async (
     result = await result.json();
   }
 
-  if (fieldNameNormalizer !== null) {
-    result = convertObjectKeys(result, fieldNameNormalizer);
-  }
+  result = convertObjectKeys(
+    result,
+    perRequestNameNormalizer || linkLevelNameNormalizer || noOpNameNormalizer,
+  );
 
   result = findRestDirectivesThenInsertNullsForOmittedFields(
     resultKey,
@@ -1099,7 +1126,9 @@ const resolver: Resolver = async (
     mainDefinition.selectionSet,
   );
 
-  result = addTypeNameToResult(result, type, typePatcher);
+  result = addTypeNameToResult(result, type, typePatcher, {
+    resolverParams: { fieldName, root, args, context, info },
+  });
   return copyExportVariables(result);
 };
 
@@ -1205,15 +1234,18 @@ export class RestLink extends ApolloLink {
         data: any,
         outerType: string,
         patchDeeper: RestLink.FunctionalTypePatcher,
+        context: RestLink.TypePatcherContext,
       ) => {
         const __typename = data.__typename || outerType;
         if (Array.isArray(data)) {
-          return data.map(d => patchDeeper(d, __typename, patchDeeper));
+          return data.map(d =>
+            patchDeeper(d, __typename, patchDeeper, context),
+          );
         }
         const subPatcher = table[__typename] || (result => result);
         return {
           __typename,
-          ...subPatcher(data, __typename, patchDeeper),
+          ...subPatcher(data, __typename, patchDeeper, context),
         };
       };
     } else {

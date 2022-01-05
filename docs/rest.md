@@ -162,6 +162,7 @@ const restLink = new RestLink({
       data: any,
       outerType: string,
       patchDeeper: RestLink.FunctionalTypePatcher,
+      context: RestLink.TypePatcherContext
     ): any => {
       if (data.results != null) {
         data.results = data.results.map( planet => ({ __typename: "Planet", ...planet }));
@@ -214,9 +215,37 @@ const restLink = new RestLink({
       data: any,
       outerType: string,
       patchDeeper: RestLink.FunctionalTypePatcher,
+      context: RestLink.TypePatcherContext
     ): any => {
       if (data.typePatchedResults != null) {
         data.typePatchedResults = data.typePatchedResults.map( planet => { __typename: "Planet", ...planet });
+      }
+      return data;
+    },
+    /* … other nested type patchers … */
+  },
+})
+```
+
+If you want to take advantage of Apollo's built-in client caching, you can provide a unique id field for your types if one is not present by default in the response from the REST API. This assumes you are using a default `id` field as your unique identifier key. If you have changed this using `dataIdFromObject`, you will need to use a different identifier in the code. [See More](https://www.apollographql.com/docs/react/v2.5/advanced/caching/#configuration)
+
+```typescript
+const restLink = new RestLink({
+  uri: '/api',
+  typePatcher: {
+    UserPayload: (
+      data: any,
+      outerType: string,
+      patchDeeper: RestLink.FunctionalTypePatcher,
+      context: RestLink.TypePatcherContext
+    ): any => {
+      if (!data.id) {
+        const { directives } = context.resolverParams.info;
+        const { path, endpoint } = directives.rest as RestLink.DirectiveOptions;
+        // path = 23483/summary
+        // endpoint = user/
+        // So we are requesting /user/23483/summary
+        data.id = path.substr(0, path.indexOf('/'));
       }
       return data;
     },
@@ -594,7 +623,7 @@ mutation encryptedPost(
 ##### `bodySerializer`
 
 If you need to serialize your data differently (say as form-encoded), you can provide a `bodySerializer` instead of relying on the default JSON serialization.
-`bodySerializer` can be either a function of the form `(data: any, headers: Headers) => {body: any, header: Headers}` or a string key. When using the string key
+`bodySerializer` can be either a function of the form `(data: any, headers: Headers) => {body: any, headers: Headers}` or a string key. When using the string key
 `RestLink` will instead use the corresponding serializer from the `bodySerializers` object that can optionally be passed in during initialization.
 
 ```graphql
