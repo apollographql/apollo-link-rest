@@ -4207,4 +4207,76 @@ describe('Playing nice with others', () => {
       authors: { message: 'Your query was bad and you should feel bad!' },
     });
   });
+
+  it('should fulfill fetch when an AbortController signal is passed but never aborted', done => {
+    fetchMock.get('/api/posts', posts);
+    const link = new RestLink({ uri: '/api' });
+
+    const query = gql`
+      query {
+        people @rest(type: "[Post]", path: "/posts") {
+          title
+        }
+      }
+    `;
+
+    const controller = new AbortController();
+    const reqPromise = toPromise<Result>(
+      execute(link, {
+        operationName: 'abortQuery',
+        query,
+        context: { fetchOptions: { signal: controller.signal } },
+      }),
+    );
+
+    const timeout = setTimeout(() => {
+      done('timeout should never run');
+    }, 100);
+
+    return reqPromise.then(res => {
+      clearTimeout(timeout);
+      expect(res.data).toEqual({
+        people: [
+          { title: 'Love apollo', __typename: 'Post' },
+          { title: 'Respect apollo', __typename: 'Post' },
+        ],
+      });
+      done();
+    });
+  });
+
+  it('should cancel fetch when an AbortController signal is passed and aborted', done => {
+    fetchMock.get('/api/posts', posts);
+    const link = new RestLink({ uri: '/api' });
+
+    const query = gql`
+      query {
+        people @rest(ftype: "[Post]", path: "/posts") {
+          title
+        }
+      }
+    `;
+
+    const controller = new AbortController();
+    const reqPromise = toPromise<Result>(
+      execute(link, {
+        operationName: 'abortQuery',
+        query,
+        context: { fetchOptions: { signal: controller.signal } },
+      }),
+    );
+    controller.abort();
+
+    let reqData = null;
+    const timeout = setTimeout(() => {
+      expect(reqData).toBeNull();
+      done();
+    }, 100);
+
+    return reqPromise.then(res => {
+      clearTimeout(timeout);
+      reqData = res.data;
+      done('fetch request should not resolve');
+    });
+  });
 });
