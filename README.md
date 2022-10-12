@@ -4,7 +4,7 @@ title: REST Link
 
 ## ⚠️ This library is under active development ⚠️
 
-This library is under active development. For information on progress check out [this issues](https://github.com/apollographql/apollo-link-rest/issues) or [the design](./designs/initial.md). We would love your help with writing docs, testing, anything! We would love for you, yes you, to be a part of the Apollo community!
+> The[Apollo Link Rest](https://github.com/apollographql/apollo-link-rest) library is maintained by Apollo community members and not an Apollo GraphQL maintained library. For information on progress check out [this issues](https://github.com/apollographql/apollo-link-rest/issues) or [the design](./designs/initial.md). We would love your help with writing docs, testing, anything! We would love for you, yes you, to be a part of the Apollo community!
 
 ## Purpose
 An Apollo Link to easily try out GraphQL without a full server. It can be used to prototype, with third-party services that don't have a GraphQL endpoint or in a transition from REST to GraphQL.
