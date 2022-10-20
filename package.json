@@ -45,7 +45,6 @@
   "peerDependencies": {
     "@apollo/client": ">=3",
     "graphql": ">=0.11",
-    "graphql-anywhere": ">=4",
     "qs": ">=6"
   },
   "devDependencies": {
@@ -63,7 +62,6 @@
     "danger": "6.x",
     "fetch-mock": "7.x",
     "graphql": "14.x",
-    "graphql-anywhere": "4.1.x",
     "isomorphic-fetch": "2.2.x",
     "jest": "23.x",
     "jest-fetch-mock": "2.x",

@@ -10,7 +10,6 @@
     "apollo-link": "1.x",
     "apollo-link-rest": "0.x",
     "graphql": "0.x",
-    "graphql-anywhere": "4.x",
     "graphql-tag": "2.x",
     "qs": "^6.6.0",
     "react": "16.x",

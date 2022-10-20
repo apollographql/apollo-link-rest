@@ -12,12 +12,12 @@ An Apollo Link to easily try out GraphQL without a full server. It can be used t
 ## Installation
 
 ```bash
-npm install apollo-link-rest apollo-link graphql graphql-anywhere qs --save
+npm install apollo-link-rest apollo-link graphql qs --save
 or
-yarn add apollo-link-rest apollo-link graphql graphql-anywhere qs
+yarn add apollo-link-rest apollo-link graphql qs
 ```
 
-`apollo-link`, `graphql`, `qs` and `graphql-anywhere` are peer dependencies needed by `apollo-link-rest`.
+`apollo-link`, `graphql` and `qs` are peer dependencies needed by `apollo-link-rest`.
 
 ## Usage
 
