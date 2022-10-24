@@ -17,7 +17,7 @@ or
 yarn add apollo-link-rest apollo-link graphql qs
 ```
 
-`apollo-link`, `graphql` and `qs` are peer dependencies needed by `apollo-link-rest`.
+`apollo-link`, `graphql`, and `qs` are peer dependencies needed by `apollo-link-rest`.
 
 ## Usage
 
