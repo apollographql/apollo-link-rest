@@ -30,6 +30,7 @@ class RepoSearch extends React.Component<{}, State> {
           <option value="react-apollo">React Apollo</option>
           <option value="apollo-client">Apollo Client</option>
         </select>
+        {/* @ts-ignore */}
         <Repo name={this.state.repo} />
       </div>
     );

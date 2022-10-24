@@ -1,9 +1,7 @@
 import * as React from 'react';
-import { render } from 'react-dom';
+import { createRoot } from 'react-dom/client';
 import { RestLink } from 'apollo-link-rest';
-import { ApolloClient } from 'apollo-client';
-import { InMemoryCache } from 'apollo-cache-inmemory';
-import { ApolloProvider } from 'react-apollo';
+import { ApolloClient, InMemoryCache, ApolloProvider } from '@apollo/client';
 
 import { RepoSearch } from './RepoSearch';
 
@@ -18,9 +16,11 @@ const client = new ApolloClient({
   link,
 });
 
-render(
+const container = document.getElementById('root')!;
+const root = createRoot(container);
+
+root.render(
   <ApolloProvider client={client}>
     <RepoSearch />
   </ApolloProvider>,
-  document.getElementById('root'),
 );
