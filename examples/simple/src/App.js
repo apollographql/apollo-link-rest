@@ -1,7 +1,5 @@
 import React, { Component } from 'react';
-import { ApolloClient } from 'apollo-client';
-import { InMemoryCache } from 'apollo-cache-inmemory';
-import { ApolloProvider } from 'react-apollo';
+import { ApolloClient, InMemoryCache, ApolloProvider } from '@apollo/client';
 import { RestLink } from 'apollo-link-rest';
 import Person from './Person';
 import './App.css';
