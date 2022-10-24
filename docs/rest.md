@@ -25,7 +25,7 @@ npm install --save @apollo/client
 Then it is time to install our link and its `peerDependencies`:
 
 ```bash
-npm install --save apollo-link-rest apollo-link graphql qs
+npm install --save apollo-link-rest graphql qs
 ```
 
 After this, you are ready to setup your apollo client:
