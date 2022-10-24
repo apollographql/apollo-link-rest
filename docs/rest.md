@@ -16,16 +16,10 @@ You can start using ApolloClient in your app today, let's see how!
 
 ## Quick start
 
-To get started, you need first to install apollo-client:
+To get started, you need first to install @apollo/client:
 
 ```bash
-npm install --save apollo-client
-```
-
-For an apollo client to work, you need a link and a cache, [more info here](https://www.apollographql.com/docs/react/basics/setup/#installation). Let's install the default in memory cache:
-
-```bash
-npm install --save apollo-cache-inmemory
+npm install --save @apollo/client
 ```
 
 Then it is time to install our link and its `peerDependencies`:
@@ -37,8 +31,7 @@ npm install --save apollo-link-rest apollo-link graphql qs
 After this, you are ready to setup your apollo client:
 
 ```js
-import { ApolloClient } from 'apollo-client';
-import { InMemoryCache } from 'apollo-cache-inmemory';
+import { ApolloClient, InMemoryCache } from '@apollo/client';
 import { RestLink } from 'apollo-link-rest';
 
 // setup your `RestLink` with your endpoint
@@ -50,6 +43,10 @@ const client = new ApolloClient({
   cache: new InMemoryCache(),
 });
 ```
+
+From the [Apollo Client "Get started" docs](https://www.apollographql.com/docs/react/get-started#step-3-initialize-apolloclient):
+
+> `cache` is an instance of `InMemoryCache`, which Apollo Client uses to cache query results after fetching them.
 
 Now it is time to write our first query, for this you need to install the `graphql-tag` package:
 
