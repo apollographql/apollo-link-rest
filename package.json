@@ -16,7 +16,7 @@
   },
   "homepage": "https://github.com/apollographql/apollo-link-rest#readme",
   "scripts": {
-    "build:browser": "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i @apollo/client/core --i @apollo/client/utilities --i apollo-utilities --i graphql --i react && npm run minify:browser",
+    "build:browser": "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i @apollo/client/core --i @apollo/client/utilities --i graphql --i react && npm run minify:browser",
     "build": "tsc -p .",
     "bundle": "rollup -c",
     "clean": "rimraf lib/* coverage/* npm/*",
