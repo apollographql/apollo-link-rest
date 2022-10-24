@@ -60,10 +60,8 @@ const query = gql`
 // and inject the data into the component. The Result type is what
 // we expect the shape of the response to be and OwnProps is what we
 // expect to be passed to this component.
-const Repo = graphql<Result, OwnProps>(query, {
-  // @ts-ignore
+const Repo = graphql<OwnProps>(query, {
   options: ({ name }) => ({ variables: { name } }),
-  // @ts-ignore
 })(RepoBase);
 
 export { Repo };
