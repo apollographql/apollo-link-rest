@@ -20,6 +20,7 @@
     "build": "tsc -p .",
     "bundle": "rollup -c",
     "clean": "rimraf lib/* coverage/* npm/*",
+    "clean:modules": "rm -rf node_modules/",
     "coverage:upload": "codecov",
     "danger": "danger run --verbose",
     "deploy": "./scripts/deploy.sh",

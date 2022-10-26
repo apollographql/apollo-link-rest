@@ -25,26 +25,30 @@ import {
 } from '../restLink';
 
 /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
-const flattenHeaders: ({ headers: Headers }) => { [key: string]: string } = ({
+function flattenHeaders({
   headers,
-}) => {
+}: {
+  headers: Headers;
+}): { [key: string]: string } {
   const headersFlattened: { [key: string]: string } = {};
   headers.forEach((value, key) => {
     headersFlattened[key] = value;
   });
   return headersFlattened;
-};
+}
 
 /** Helper that flattens headers & preserves duplicate objects */
-const orderDupPreservingFlattenedHeaders: (
-  { headers: Headers },
-) => string[] = ({ headers }) => {
-  const orderedFlattened = [];
+function orderDupPreservingFlattenedHeaders({
+  headers,
+}: {
+  headers: Headers;
+}): string[] {
+  const orderedFlattened: string[] = [];
   headers.forEach((value, key) => {
     orderedFlattened.push(`${key}: ${value}`);
   });
   return orderedFlattened;
-};
+}
 
 const sampleQuery = gql`
   query post {
@@ -694,7 +698,7 @@ describe('Complex responses need nested __typename insertions', () => {
     });
   });
 
-  it.skip('can configure typename by providing *both* a custom type-patcher table *and* nested @type annotations -- see Issue 112 https://github.com/apollographql/apollo-link-rest/issues/112', async () => {
+  it.skip('can configure typename by providing *both* a custom type-patcher table *and* nested @type annotations -- see Issue 112 https://github.com/apollographql/apollo-link-rest/issues/112 ', async () => {
     expect.assertions(1);
 
     const patchIfExists = (
