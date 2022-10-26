@@ -5,6 +5,10 @@
 #
 #    var language = require('react-apollo/server');
 #
+if [ "${npm_command}" != "run-script" ]; then
+  echo "To ensure that your npm cli has the right credentials, you must run this through 'npm run deploy' instead of yarn." >&2
+  exit 1;
+fi
 
 # Clear the built output
 rm -rf ./lib

@@ -4,6 +4,8 @@
 
 ### v0.next
 
+### v0.9.0
+
 * Feature: Pass context to typePatcher to make it possible to extract args from the URL for use when patching [#260](https://github.com/apollographql/apollo-link-rest/pull/260) [#261](https://github.com/apollographql/apollo-link-rest/pull/261)
 * Feature: Allow per-request field-name normalization for symmetry with de-normalization [#253](https://github.com/apollographql/apollo-link-rest/pull/253)
 * Improvement: Use globalThis instead of global [#293](https://github.com/apollographql/apollo-link-rest/pull/293)

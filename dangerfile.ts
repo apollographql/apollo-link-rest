@@ -1,4 +1,5 @@
 // Removed import
+import danger from 'danger';
 import { includes } from 'lodash';
 import * as fs from 'fs';
 
@@ -57,7 +58,9 @@ const raiseIssueAboutPaths = (
 };
 
 const authors = commits.map(x => x.author.login);
-const isBot = authors.some(x => ['greenkeeper', 'renovate'].indexOf(x) > -1);
+const isBot = authors.some(
+  x => ['greenkeeper', 'renovate', 'dependabot'].indexOf(x) > -1,
+);
 
 // Rules
 if (!isBot) {
