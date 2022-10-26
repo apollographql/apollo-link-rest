@@ -10,6 +10,7 @@
 * Feature: Allow per-request field-name normalization for symmetry with de-normalization [#253](https://github.com/apollographql/apollo-link-rest/pull/253)
 * Improvement: Use globalThis instead of global [#293](https://github.com/apollographql/apollo-link-rest/pull/293)
 * Fix: fieldNameNormalizer mangling ArrayBuffer/Blob types [#247](https://github.com/apollographql/apollo-link-rest/pull/247)
+* Drop dependency on `graphql-anywhere`! [#301](https://github.com/apollographql/apollo-link-rest/pull/301)
 
 ### v0.8.0
 
