@@ -2079,9 +2079,9 @@ describe('Query options', () => {
           query: sampleQuery,
           context: {
             fetchOptions: {
-              credentials: "my-credentials",
-            }
-          }
+              credentials: 'my-credentials',
+            },
+          },
         }),
       );
 
@@ -2215,7 +2215,8 @@ describe('Query options', () => {
 
       const postTitleQuery = gql`
         query postTitle {
-          post(input: { data: true }, id: "1") @rest(type: "Post", path: "/post/:id", method: "DELETE") {
+          post(input: { data: true }, id: "1")
+            @rest(type: "Post", path: "/post/:id", method: "DELETE") {
             id
             title
           }
@@ -2229,9 +2230,9 @@ describe('Query options', () => {
           variables: { id: '1' },
           context: {
             fetchOptions: {
-              method: "POST"
-            }
-          }
+              method: 'POST',
+            },
+          },
         }),
       );
 
@@ -2382,10 +2383,10 @@ describe('Query options', () => {
           context: {
             fetchOptions: {
               headers: {
-                authorization: "1234",
-              }
-            }
-          }
+                authorization: '1234',
+              },
+            },
+          },
         }),
       );
 
@@ -2480,7 +2481,7 @@ describe('Query options', () => {
           headers: {
             authorization: 'no user',
             fetchOptionsSetup: 'in-setup duplicate fetchOptionsSetup',
-            setup: 'setup'
+            setup: 'setup',
           },
         }),
       ]);
@@ -2509,9 +2510,9 @@ describe('Query options', () => {
                 fetchOptionsContext: 'fetchOptionsContext',
                 fetchOptionsSetup: 'fetchOptionsSetup',
                 fetchOptions: 'fetchOptions',
-              }
-            }
-          }
+              },
+            },
+          },
         }),
       );
 
@@ -2581,11 +2582,11 @@ describe('Query options', () => {
           context: {
             fetchOptions: {
               headers: {
-                authorization: "fetchOptions",
-                fetchOptions: "fetchOptions",
-              }
-            }
-          }
+                authorization: 'fetchOptions',
+                fetchOptions: 'fetchOptions',
+              },
+            },
+          },
         }),
       );
 
@@ -2596,7 +2597,7 @@ describe('Query options', () => {
             authorization: 'initial setup',
             setup: 'setup',
             context: 'context',
-            fetchoptions: "fetchOptions",
+            fetchoptions: 'fetchOptions',
           }),
         }),
       );
@@ -2696,7 +2697,9 @@ describe('Query options', () => {
     });
   });
   describe('body', () => {
-    it('prioritizes fetchOptions body over directive body', async () => {
+    it('logs a warning that the fetchOptions body is ignored', async () => {
+      jest.spyOn(console, 'warn').mockImplementation();
+
       const link = new RestLink({
         uri: '/api',
       });
@@ -2731,20 +2734,103 @@ describe('Query options', () => {
         execute(link, {
           operationName: 'postTitle',
           query: createPostMutation,
-          variables: { input: { id: '1', title: 'title', items: [{ name: 'name' }] } },
+          variables: {
+            input: { id: '1', title: 'title', items: [{ name: 'name' }] },
+          },
           context: {
             fetchOptions: {
-              body: 'my-body'
-            }
-          }
+              body: 'my-body',
+            },
+          },
         }),
       );
 
       const body = fetchMock.lastCall()[1].body;
-      expect(body).toBe('"my-body"');
+      expect(body).toBe(
+        JSON.stringify({ id: '1', title: 'title', items: [{ name: 'name' }] }),
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Passing a `body` in `fetchOptions` is not supported. Please use the @rest() directive instead.',
+        ),
+      );
     });
-  })
+  });
   describe('fetchOptions', () => {
+    const posts = [
+      { title: 'Love apollo' },
+      { title: 'Respect apollo', meta: { creatorId: 1 } },
+    ];
+    it('should fulfill fetch when an AbortController signal is passed but never aborted', done => {
+      fetchMock.get('/api/posts', posts);
+      const link = new RestLink({ uri: '/api' });
+
+      const query = gql`
+        query {
+          people @rest(type: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+
+      const controller = new AbortController();
+      const reqPromise = toPromise<Result>(
+        execute(link, {
+          operationName: 'abortQuery',
+          query,
+          context: { fetchOptions: { signal: controller.signal } },
+        }),
+      );
+
+      const timeout = setTimeout(() => {
+        done('timeout should never run');
+      }, 100);
+
+      return reqPromise.then(res => {
+        clearTimeout(timeout);
+        expect(res.data).toEqual({
+          people: [
+            { title: 'Love apollo', __typename: 'Post' },
+            { title: 'Respect apollo', __typename: 'Post' },
+          ],
+        });
+        done();
+      });
+    });
+    it('should cancel fetch when an AbortController signal is passed and aborted', done => {
+      fetchMock.get('/api/posts', posts);
+      const link = new RestLink({ uri: '/api' });
+
+      const query = gql`
+        query {
+          people @rest(ftype: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+
+      const controller = new AbortController();
+      const reqPromise = toPromise<Result>(
+        execute(link, {
+          operationName: 'abortQuery',
+          query,
+          context: { fetchOptions: { signal: controller.signal } },
+        }),
+      );
+      controller.abort();
+
+      let reqData = null;
+      const timeout = setTimeout(() => {
+        expect(reqData).toBeNull();
+        done();
+      }, 100);
+
+      return reqPromise.then(res => {
+        clearTimeout(timeout);
+        reqData = res.data;
+        done('fetch request should not resolve');
+      });
+    });
     it('passes all fetchOptions to the fetch call', async () => {
       const link = new RestLink({
         uri: '/api',
@@ -2762,7 +2848,7 @@ describe('Query options', () => {
         }
       `;
 
-      const abortController = new AbortController()
+      const abortController = new AbortController();
       await toPromise<Result>(
         execute(link, {
           operationName: 'postTitle',
@@ -2770,36 +2856,36 @@ describe('Query options', () => {
           variables: { id: '1' },
           context: {
             fetchOptions: {
-              cache: "no-cache",
-              integrity: "integrity-hash",
+              cache: 'no-cache',
+              integrity: 'integrity-hash',
               keepalive: true,
-              mode: "same-origin",
-              redirect: "follow",
-              referrer: "referrer",
-              referrerPolicy: "origin",
+              mode: 'same-origin',
+              redirect: 'follow',
+              referrer: 'referrer',
+              referrerPolicy: 'origin',
               signal: abortController.signal,
               window: null,
-            }
-          }
+            },
+          },
         }),
       );
 
       const requestCall = fetchMock.calls('/api/post/1')[0];
       expect(requestCall[1]).toEqual(
         expect.objectContaining({
-          cache: "no-cache",
-          integrity: "integrity-hash",
+          cache: 'no-cache',
+          integrity: 'integrity-hash',
           keepalive: true,
-          mode: "same-origin",
-          redirect: "follow",
-          referrer: "referrer",
-          referrerPolicy: "origin",
+          mode: 'same-origin',
+          redirect: 'follow',
+          referrer: 'referrer',
+          referrerPolicy: 'origin',
           signal: abortController.signal,
           window: null,
         }),
       );
     });
-  })
+  });
 });
 
 describe('Mutation', () => {
@@ -3757,7 +3843,7 @@ describe('Mutation', () => {
       //mocking FileList object
       const mockFileList = Object.create(FileList.prototype);
       Object.defineProperty(mockFileList, 'item', {
-        value: function (number: number) {
+        value: function(number: number) {
           return mockFileList[number];
         },
         writable: false,
@@ -3880,7 +3966,9 @@ describe('validateRequestMethodForOperationType', () => {
       expect.assertions(1);
       expect(() =>
         validateRequestMethodForOperationType('GIBBERISH', 'mutation'),
-      ).toThrowError('"mutation" operations do not support the GIBBERISH method; please use one of GET, POST, PUT, PATCH, DELETE');
+      ).toThrowError(
+        '"mutation" operations do not support the GIBBERISH method; please use one of GET, POST, PUT, PATCH, DELETE',
+      );
     });
   });
   describe('for operation type "subscription"', () => {
@@ -3928,9 +4016,9 @@ describe('export directive', () => {
     } catch (e) {
       expect(e.message).toBe(
         'Missing parameters to run query, specify it in the query params or use ' +
-        'an export directive. (If you need to use ":" inside a variable string' +
-        ' make sure to encode the variables properly using `encodeURIComponent' +
-        '`. Alternatively see documentation about using pathBuilder.)',
+          'an export directive. (If you need to use ":" inside a variable string' +
+          ' make sure to encode the variables properly using `encodeURIComponent' +
+          '`. Alternatively see documentation about using pathBuilder.)',
       );
     }
   });

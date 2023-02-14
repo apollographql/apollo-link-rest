@@ -752,10 +752,7 @@ const makeHeadersMergePolicy = (
   headersToOverride: string[] | null,
 ): RestLink.HeadersMergePolicy => {
   return (...headers) => {
-    return headersMergePolicy(
-      headersToOverride,
-      ...headers
-    );
+    return headersMergePolicy(headersToOverride, ...headers);
   };
 };
 
@@ -771,14 +768,18 @@ export const validateRequestMethodForOperationType = (
         return;
       }
       throw new Error(
-        `"query" operations do not support the ${method} method; please use one of ${SUPPORTED_HTTP_VERBS.join(', ')}`
+        `"query" operations do not support the ${method} method; please use one of ${SUPPORTED_HTTP_VERBS.join(
+          ', ',
+        )}`,
       );
     case 'mutation':
       if (SUPPORTED_HTTP_VERBS.indexOf(method.toUpperCase()) !== -1) {
         return;
       }
       throw new Error(
-        `"mutation" operations do not support the ${method} method; please use one of ${SUPPORTED_HTTP_VERBS.join(', ')}`
+        `"mutation" operations do not support the ${method} method; please use one of ${SUPPORTED_HTTP_VERBS.join(
+          ', ',
+        )}`,
       );
     case 'subscription':
       throw new Error('A "subscription" operation is not supported yet.');
@@ -979,9 +980,9 @@ const resolver: Resolver = async (
         if (pathWithParams.includes(':')) {
           throw new Error(
             'Missing parameters to run query, specify it in the query params or use ' +
-            'an export directive. (If you need to use ":" inside a variable string' +
-            ' make sure to encode the variables properly using `encodeURIComponent' +
-            '`. Alternatively see documentation about using pathBuilder.)',
+              'an export directive. (If you need to use ":" inside a variable string' +
+              ' make sure to encode the variables properly using `encodeURIComponent' +
+              '`. Alternatively see documentation about using pathBuilder.)',
           );
         }
         return pathWithParams;
@@ -1007,13 +1008,23 @@ const resolver: Resolver = async (
     bodySerializer,
   } = directives.rest as RestLink.DirectiveOptions;
 
-  const { method: fetchOptionsMethod, body: fetchOptionsBody, ...fetchOptionsRest } = fetchOptions
+  const {
+    method: fetchOptionsMethod,
+    body: fetchOptionsBody,
+    ...fetchOptionsRest
+  } = fetchOptions;
 
   method = fetchOptionsMethod
     ? (fetchOptionsMethod as RestLink.DirectiveOptions['method'])
     : method
-      ? method
-      : 'GET'
+    ? method
+    : 'GET';
+
+  if (fetchOptionsBody) {
+    console.warn(
+      'Passing a `body` in `fetchOptions` is not supported. Please use the @rest() directive instead.',
+    );
+  }
 
   if (!bodyKey) {
     bodyKey = 'input';
@@ -1023,7 +1034,7 @@ const resolver: Resolver = async (
   let overrideHeaders: Headers = undefined;
   if (-1 === ['GET', 'DELETE'].indexOf(method)) {
     // Prepare our body!
-    if (!fetchOptionsBody && !bodyBuilder) {
+    if (!bodyBuilder) {
       // By convention GraphQL recommends mutations having a single argument named "input"
       // https://dev-blog.apollodata.com/designing-graphql-mutations-e09de826ed97
 
@@ -1042,10 +1053,10 @@ const resolver: Resolver = async (
     }
 
     body = convertObjectKeys(
-      fetchOptionsBody ? fetchOptionsBody : bodyBuilder(allParams),
+      bodyBuilder(allParams),
       perRequestNameDenormalizer ||
-      linkLevelNameDenormalizer ||
-      noOpNameNormalizer,
+        linkLevelNameDenormalizer ||
+        noOpNameNormalizer,
     );
 
     let serializedBody: RestLink.SerializedBody;
@@ -1054,7 +1065,7 @@ const resolver: Resolver = async (
       if (!serializers.hasOwnProperty(bodySerializer)) {
         throw new Error(
           '"bodySerializer" must correspond to configured serializer. ' +
-          `Please make sure to specify a serializer called ${bodySerializer} in the "bodySerializers" property of the RestLink.`,
+            `Please make sure to specify a serializer called ${bodySerializer} in the "bodySerializers" property of the RestLink.`,
         );
       }
       serializedBody = serializers[bodySerializer](body, headers);
@@ -1325,21 +1336,28 @@ export class RestLink extends ApolloLink {
     }
 
     const nonRest = this.removeRestSetsFromDocument(query);
-    const { headers: fetchOptionsHeaders, credentials: fetchOptionsCredentials, ...fetchOptionsRest } = context.fetchOptions || {}
+    const {
+      headers: fetchOptionsHeaders,
+      credentials: fetchOptionsCredentials,
+      ...fetchOptionsRest
+    } = context.fetchOptions || {};
 
     // 1. Use the user's merge policy if any
-    const headersMergePolicy: RestLink.HeadersMergePolicy =
-      context.headersMergePolicy
-        ? context.headersMergePolicy
-        : makeHeadersMergePolicy(
+    const headersMergePolicy: RestLink.HeadersMergePolicy = context.headersMergePolicy
+      ? context.headersMergePolicy
+      : makeHeadersMergePolicy(
           Array.isArray(context.headersToOverride)
-            // 2.a. Override just the passed in headers, if user provided that optional array
-            ? context.headersToOverride
-            // 2.b Glue the link (default) headers to the request-context headers
-            : null
+            ? // 2.a. Override just the passed in headers, if user provided that optional array
+              context.headersToOverride
+            : // 2.b Glue the link (default) headers to the request-context headers
+              null,
         );
 
-    const headers = headersMergePolicy(this.headers, context.headers, fetchOptionsHeaders);
+    const headers = headersMergePolicy(
+      this.headers,
+      context.headers,
+      fetchOptionsHeaders,
+    );
     if (!headers.has('Accept')) {
       // Since we assume a json body on successful responses set the Accept
       // header accordingly if it is not provided by the user
