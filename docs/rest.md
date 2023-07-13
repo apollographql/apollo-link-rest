@@ -90,6 +90,7 @@ Construction of `RestLink` takes an options object to customize the behavior of 
 * `defaultSerializer /function/`: _optional_ function that will be used by the `RestLink` as the default serializer when no `bodySerializer` is defined for a `@rest` call. The function will also be passed the current `Header` set, which can be updated before the request is sent to `fetch`. Default method uses `JSON.stringify` and sets the `Content-Type` to `application/json`.
 * `bodySerializers: /map-of-functions/`: _optional_ Structure to allow the definition of alternative serializers, which can then be specified by their key.
 * `responseTransformer?: /function/`: _optional_ Apollo expects a record response to return a root object, and a collection of records response to return an array of objects. Use this function to structure the response into the format Apollo expects if your response data is structured differently.
+* `enableRestLinkChaining?: boolean`: _optional_ a boolean that tells RestLink that you have supplied multiple instances of the RestLink class to Apollo. Useful for situations like different headers for different endpoints. Cannot be used with default URIs. If you need a default URI, add it to the last RestLink in your chain.
 
 ### Multiple endpoints
 
