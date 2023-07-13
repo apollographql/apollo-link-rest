@@ -220,6 +220,13 @@ export namespace RestLink {
      * Parse the response body of an HTTP request into the format that Apollo expects.
      */
     responseTransformer?: ResponseTransformer;
+
+    /**
+     * When set to true, enables you to supply multiple instances of RestLink in your setup. 
+     * Useful for interacting with backends that would require different headers or other configs
+     * This option assumes you are not using default URI's
+     */
+    enableRestLinkChaining?: boolean;
   };
 
   /** @rest(...) Directive Options */
@@ -1174,7 +1181,7 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
   };
 };
 
-const CONNECTION_REMOVE_CONFIG = (endpoints: Record<string, any>, removeRestLinksThatHaveEndpoints: boolean) => {
+const CONNECTION_REMOVE_CONFIG = (endpoints: Record<string, any>, enableRestLinkChaining: boolean, removeRestLinksThatHaveEndpoints: boolean) => {
    return {
     test: (directive: DirectiveNode) => {
       /** Composability Modification
@@ -1186,7 +1193,11 @@ const CONNECTION_REMOVE_CONFIG = (endpoints: Record<string, any>, removeRestLink
           return val;
         }
       });
-      return directive.name.value === 'rest' && (removeRestLinksThatHaveEndpoints ? foundEndpoint : !foundEndpoint);
+      const isRestDirective = directive.name.value === 'rest';
+      if (!enableRestLinkChaining) {
+        return isRestDirective;
+      }
+      return isRestDirective && (removeRestLinksThatHaveEndpoints ? foundEndpoint : !foundEndpoint);
     },
     remove: true,
   };
@@ -1205,6 +1216,7 @@ export class RestLink extends ApolloLink {
   private readonly serializers: RestLink.Serializers;
   private readonly responseTransformer: RestLink.ResponseTransformer;
   private readonly processedDocuments: Map<DocumentNode, DocumentNode>;
+  private readonly enableRestLinkChaining?: boolean;
 
   constructor({
     uri,
@@ -1218,6 +1230,7 @@ export class RestLink extends ApolloLink {
     bodySerializers,
     defaultSerializer,
     responseTransformer,
+    enableRestLinkChaining
   }: RestLink.Options) {
     super();
     const fallback = {};
@@ -1230,6 +1243,13 @@ export class RestLink extends ApolloLink {
       );
     }
     if (uri != null) {
+      if (enableRestLinkChaining) {
+        /** 
+         * since chaining relies on not removing directives that have undefined endpoints and a default URI means all endpoints are defined, we can't pass these two options together
+         * you may set enableRestLinkChaining to false (or leave it undefined) on your terminal RestLink if you want a default URI for any unmatched endpoints
+         */
+        throw new Error("enableRestLinkChaining is not a valid option when passing a default URI");
+      }
       const currentDefaultURI = (endpoints || {})[DEFAULT_ENDPOINT_KEY];
       if (currentDefaultURI != null && currentDefaultURI != uri) {
         throw new Error(
@@ -1320,7 +1340,7 @@ export class RestLink extends ApolloLink {
     checkDocument(query);
 
     const docClone = removeDirectivesFromDocument(
-      [CONNECTION_REMOVE_CONFIG(this.endpoints, removeRestLinksThatHaveEndpoints)],
+      [CONNECTION_REMOVE_CONFIG(this.endpoints, this.enableRestLinkChaining, removeRestLinksThatHaveEndpoints)],
       query,
     );
 
