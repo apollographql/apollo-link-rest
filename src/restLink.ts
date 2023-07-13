@@ -1422,11 +1422,6 @@ export class RestLink extends ApolloLink {
             resolverOptions,
           )
             .then(data => {
-              /** Composability Modification:
-               * not sure why the code is caching setContext but we want to make sure
-               * we're setting context the the right point in the chain and using a cached
-               * setContext can break this
-               */
               operation.setContext({
                 /** Composability Modification:
                  * get the context fresh since it could have changed between when it was cached above
