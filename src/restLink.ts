@@ -1423,11 +1423,8 @@ export class RestLink extends ApolloLink {
           )
             .then(data => {
               operation.setContext({
-                /** Composability Modification:
+                /**
                  * get the context fresh since it could have changed between when it was cached above
-                 * and when this code is called
-                 * we use this data field to preserve the data from previous rest link requests
-                 * aside: what is restResponses used for? I can't find refs to it
                  */
                 data: Object.assign((operation.getContext().data || {}), data),
                 restResponses: (operation.getContext().restResponses || []).concat(
