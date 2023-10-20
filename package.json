@@ -58,7 +58,7 @@
     "@types/qs": "6.5.x",
     "browserify": "16.2.x",
     "bundlesize": "0.17.x",
-    "camelcase": "5.0.x",
+    "camelcase": "5.3.x",
     "codecov": "3.x",
     "danger": "6.x",
     "fetch-mock": "7.x",
