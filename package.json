@@ -70,7 +70,7 @@
     "lint-staged": "8.1.x",
     "lodash": "4.17.x",
     "pre-commit": "1.2.x",
-    "prettier": "1.15.x",
+    "prettier": "1.19.x",
     "qs": "6.6.x",
     "rimraf": "2.6.x",
     "rollup": "0.67.x",
