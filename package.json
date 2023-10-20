@@ -57,7 +57,7 @@
     "@types/node": "10.x",
     "@types/qs": "6.5.x",
     "browserify": "16.2.x",
-    "bundlesize": "0.17.x",
+    "bundlesize": "0.18.x",
     "camelcase": "5.0.x",
     "codecov": "3.x",
     "danger": "6.x",
