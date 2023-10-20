@@ -72,7 +72,7 @@
     "pre-commit": "1.2.x",
     "prettier": "1.15.x",
     "qs": "6.6.x",
-    "rimraf": "2.6.x",
+    "rimraf": "2.7.x",
     "rollup": "0.67.x",
     "rollup-plugin-local-resolve": "1.0.x",
     "rollup-plugin-sourcemaps": "0.4.x",
