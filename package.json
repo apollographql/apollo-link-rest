@@ -66,7 +66,7 @@
     "isomorphic-fetch": "2.2.x",
     "jest": "23.x",
     "jest-fetch-mock": "2.x",
-    "lerna": "3.6.x",
+    "lerna": "3.22.x",
     "lint-staged": "8.1.x",
     "lodash": "4.17.x",
     "pre-commit": "1.2.x",
