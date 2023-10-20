@@ -56,7 +56,7 @@
     "@types/jest": "23.x",
     "@types/node": "10.x",
     "@types/qs": "6.5.x",
-    "browserify": "16.2.x",
+    "browserify": "16.5.x",
     "bundlesize": "0.17.x",
     "camelcase": "5.0.x",
     "codecov": "3.x",
