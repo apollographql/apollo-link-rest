@@ -639,7 +639,7 @@ const globalScope = (typeof globalThis === 'object' && globalThis) || global;
 
 /** Recursively descends the provided object tree and converts all the keys */
 const convertObjectKeys = (
-  object: object,
+  object: any,
   __converter: RestLink.FieldNameNormalizer,
   keypath: string[] = [],
 ): object => {
@@ -714,10 +714,13 @@ export const normalizeHeaders = (
 };
 
 /**
- * Returns a new Headers Group that contains all the headers.
- * - If there are duplicates, they will be in the returned header set multiple times!
+ * This defines the policy by which headers should be merged.
+ * - If `headersToOverride` is null, then all headers will simply be concatenated
+ * - If `headersToOverride` is provided, only the last occurrence of any header in the list will be returned
+ * - If there are duplicates that are not listed in `headersToOverride`, they will be in the returned header set multiple times!
  */
-export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
+export const headersMergePolicy = (
+  headersToOverride: string[] | null,
   ...headerGroups: Headers[]
 ): Headers => {
   return headerGroups.reduce((accumulator, current) => {
@@ -728,7 +731,13 @@ export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
       current = normalizeHeaders(current);
     }
     current.forEach((value, key) => {
-      accumulator.append(key, value);
+      if (headersToOverride && headersToOverride.indexOf(key) !== -1) {
+        // key in overrides, set the header
+        accumulator.set(key, value);
+      } else {
+        // key not in overrides, or overrides are null, append the header
+        accumulator.append(key, value);
+      }
     });
 
     return accumulator;
@@ -736,34 +745,14 @@ export const concatHeadersMergePolicy: RestLink.HeadersMergePolicy = (
 };
 
 /**
- * This merge policy deletes any matching headers from the link's default headers.
- * - Pass headersToOverride array & a headers arg to context and this policy will automatically be selected.
+ * Returns a curried instance of `headersMergePolicy` with a predefined
+ * value for `headerToOverride`
  */
-export const overrideHeadersMergePolicy = (
-  linkHeaders: Headers,
-  headersToOverride: string[],
-  requestHeaders: Headers | null,
-): Headers => {
-  const result = new Headers();
-  linkHeaders.forEach((value, key) => {
-    if (headersToOverride.indexOf(key) !== -1) {
-      return;
-    }
-    result.append(key, value);
-  });
-  return concatHeadersMergePolicy(result, requestHeaders || new Headers());
-};
-export const overrideHeadersMergePolicyHelper = overrideHeadersMergePolicy; // Deprecated name
-
-const makeOverrideHeadersMergePolicy = (
-  headersToOverride: string[],
+const makeHeadersMergePolicy = (
+  headersToOverride: string[] | null,
 ): RestLink.HeadersMergePolicy => {
-  return (linkHeaders, requestHeaders) => {
-    return overrideHeadersMergePolicy(
-      linkHeaders,
-      headersToOverride,
-      requestHeaders,
-    );
+  return (...headers) => {
+    return headersMergePolicy(headersToOverride, ...headers);
   };
 };
 
@@ -779,13 +768,19 @@ export const validateRequestMethodForOperationType = (
         return;
       }
       throw new Error(
-        `A "query" operation can only support "GET" requests but got "${method}".`,
+        `"query" operations do not support the ${method} method; please use one of ${SUPPORTED_HTTP_VERBS.join(
+          ', ',
+        )}`,
       );
     case 'mutation':
       if (SUPPORTED_HTTP_VERBS.indexOf(method.toUpperCase()) !== -1) {
         return;
       }
-      throw new Error('"mutation" operations do not support that HTTP-verb');
+      throw new Error(
+        `"mutation" operations do not support the ${method} method; please use one of ${SUPPORTED_HTTP_VERBS.join(
+          ', ',
+        )}`,
+      );
     case 'subscription':
       throw new Error('A "subscription" operation is not supported yet.');
     default:
@@ -822,10 +817,10 @@ interface LinkChainContext {
   /** Headers the user wants to set on this request. See also headersMergePolicy */
   headers?: RestLink.InitializationHeaders | null;
 
-  /** Will default to concatHeadersMergePolicy unless headersToOverride is set */
+  /** Will default to simply concatenating all headers unless headersToOverride is set */
   headersMergePolicy?: RestLink.HeadersMergePolicy | null;
 
-  /** List of headers to override, passing this will swap headersMergePolicy if necessary */
+  /** List of headers to override; this is ignored if headersMergePolicy is provided */
   headersToOverride?: string[] | null;
 
   /** An array of the responses from each fetched URL, useful for accessing headers in earlier links */
@@ -845,6 +840,7 @@ interface RequestContext {
 
   endpoints: RestLink.Endpoints;
   customFetch: RestLink.CustomFetch;
+  fetchOptions: RequestInit;
   operationType: OperationTypeNode;
   fieldNameNormalizer: RestLink.FieldNameNormalizer;
   fieldNameDenormalizer: RestLink.FieldNameNormalizer;
@@ -933,6 +929,7 @@ const resolver: Resolver = async (
     endpoints,
     headers,
     customFetch,
+    fetchOptions,
     operationType,
     typePatcher,
     mainDefinition,
@@ -1010,9 +1007,25 @@ const resolver: Resolver = async (
     fieldNameNormalizer: perRequestNameNormalizer,
     bodySerializer,
   } = directives.rest as RestLink.DirectiveOptions;
-  if (!method) {
-    method = 'GET';
+
+  const {
+    method: fetchOptionsMethod,
+    body: fetchOptionsBody,
+    ...fetchOptionsRest
+  } = fetchOptions;
+
+  method = fetchOptionsMethod
+    ? (fetchOptionsMethod as RestLink.DirectiveOptions['method'])
+    : method
+    ? method
+    : 'GET';
+
+  if (fetchOptionsBody) {
+    console.warn(
+      'Passing a `body` in `fetchOptions` is not supported. Please use the @rest() directive instead.',
+    );
   }
+
   if (!bodyKey) {
     bodyKey = 'input';
   }
@@ -1069,9 +1082,10 @@ const resolver: Resolver = async (
   validateRequestMethodForOperationType(method, operationType || 'query');
 
   const requestParams = {
+    ...fetchOptionsRest,
     method,
     headers: overrideHeaders || headers,
-    body: body,
+    body,
 
     // Only set credentials if they're non-null as some browsers throw an exception:
     // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
@@ -1322,24 +1336,28 @@ export class RestLink extends ApolloLink {
     }
 
     const nonRest = this.removeRestSetsFromDocument(query);
+    const {
+      headers: fetchOptionsHeaders,
+      credentials: fetchOptionsCredentials,
+      ...fetchOptionsRest
+    } = context.fetchOptions || {};
 
     // 1. Use the user's merge policy if any
-    let headersMergePolicy: RestLink.HeadersMergePolicy =
-      context.headersMergePolicy;
-    if (
-      headersMergePolicy == null &&
-      Array.isArray(context.headersToOverride)
-    ) {
-      // 2.a. Override just the passed in headers, if user provided that optional array
-      headersMergePolicy = makeOverrideHeadersMergePolicy(
-        context.headersToOverride,
-      );
-    } else if (headersMergePolicy == null) {
-      // 2.b Glue the link (default) headers to the request-context headers
-      headersMergePolicy = concatHeadersMergePolicy;
-    }
+    const headersMergePolicy: RestLink.HeadersMergePolicy = context.headersMergePolicy
+      ? context.headersMergePolicy
+      : makeHeadersMergePolicy(
+          Array.isArray(context.headersToOverride)
+            ? // 2.a. Override just the passed in headers, if user provided that optional array
+              context.headersToOverride
+            : // 2.b Glue the link (default) headers to the request-context headers
+              null,
+        );
 
-    const headers = headersMergePolicy(this.headers, context.headers);
+    const headers = headersMergePolicy(
+      this.headers,
+      context.headers,
+      fetchOptionsHeaders,
+    );
     if (!headers.has('Accept')) {
       // Since we assume a json body on successful responses set the Accept
       // header accordingly if it is not provided by the user
@@ -1347,7 +1365,7 @@ export class RestLink extends ApolloLink {
     }
 
     const credentials: RequestCredentials =
-      context.credentials || this.credentials;
+      fetchOptionsCredentials || context.credentials || this.credentials;
 
     const queryWithTypename = addTypenameToDocument(query);
 
@@ -1364,6 +1382,7 @@ export class RestLink extends ApolloLink {
       exportVariablesByNode: new Map(),
       credentials,
       customFetch: this.customFetch,
+      fetchOptions: fetchOptionsRest,
       operationType,
       fieldNameNormalizer: this.fieldNameNormalizer,
       fieldNameDenormalizer: this.fieldNameDenormalizer,

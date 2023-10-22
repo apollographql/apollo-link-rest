@@ -2048,6 +2048,47 @@ describe('Query options', () => {
       expect(credentials).toBe('my-credentials');
     });
 
+    it('prioritizes fetchOptions credentials over context and setup credentials', async () => {
+      expect.assertions(2);
+
+      const credentialsMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          credentials: 'wrong-credentials-context',
+        });
+        return forward(operation).map(result => {
+          const { credentials } = operation.getContext();
+          expect(credentials).toBeDefined();
+          return result;
+        });
+      });
+
+      const link = ApolloLink.from([
+        credentialsMiddleware,
+        new RestLink({
+          uri: '/api',
+          credentials: 'wrong-credentials-setup' as RequestCredentials,
+        }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      await toPromise<Result>(
+        execute(link, {
+          operationName: 'post',
+          query: sampleQuery,
+          context: {
+            fetchOptions: {
+              credentials: 'my-credentials',
+            },
+          },
+        }),
+      );
+
+      const credentials = fetchMock.lastCall()[1].credentials;
+      expect(credentials).toBe('my-credentials');
+    });
+
     it('sets the fetch responses on context.restResponses', async () => {
       expect.assertions(5);
 
@@ -2134,7 +2175,6 @@ describe('Query options', () => {
         expect.objectContaining({ method: 'GET' }),
       );
     });
-
     it('works without specifying a request method', async () => {
       expect.assertions(1);
 
@@ -2163,6 +2203,42 @@ describe('Query options', () => {
       const requestCall = fetchMock.calls('/api/post/1')[0];
       expect(requestCall[1]).toEqual(
         expect.objectContaining({ method: 'GET' }),
+      );
+    });
+    it('prioritizes fetchOptions method over directive method', async () => {
+      expect.assertions(1);
+
+      const link = new RestLink({ uri: '/api' });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(input: { data: true }, id: "1")
+            @rest(type: "Post", path: "/post/:id", method: "DELETE") {
+            id
+            title
+          }
+        }
+      `;
+
+      await toPromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+          context: {
+            fetchOptions: {
+              method: 'POST',
+            },
+          },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
@@ -2282,6 +2358,47 @@ describe('Query options', () => {
         }),
       );
     });
+    it('adds headers to the request from the fetchOptions', async () => {
+      const link = new RestLink({
+        uri: '/api',
+      });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await toPromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+          context: {
+            fetchOptions: {
+              headers: {
+                authorization: '1234',
+              },
+            },
+          },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            authorization: '1234',
+          }),
+        }),
+      );
+    });
     it('prioritizes context headers over setup headers', async () => {
       expect.assertions(2);
 
@@ -2337,6 +2454,79 @@ describe('Query options', () => {
         'setup: setup, in-context duplicate setup',
       ]);
     });
+    it('prioritizes fetchOptions headers over context and setup headers', async () => {
+      expect.assertions(2);
+
+      const headersMiddleware = new ApolloLink((operation, forward) => {
+        operation.setContext({
+          headers: {
+            authorization: '1234',
+            // won't be overridden, will be duplicated because of headersToOverride
+            fetchOptionsContext: 'in-context duplicate fetchOptionsContext',
+            setup: 'in-context duplicate setup',
+            context: 'context',
+          },
+          headersToOverride: ['authorization'],
+        });
+        return forward(operation).map(result => {
+          const { headers } = operation.getContext();
+          expect(headers).toBeDefined();
+          return result;
+        });
+      });
+      const link = ApolloLink.from([
+        headersMiddleware,
+        new RestLink({
+          uri: '/api',
+          headers: {
+            authorization: 'no user',
+            fetchOptionsSetup: 'in-setup duplicate fetchOptionsSetup',
+            setup: 'setup',
+          },
+        }),
+      ]);
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      await toPromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+          context: {
+            fetchOptions: {
+              headers: {
+                authorization: 'fetch user',
+                fetchOptionsContext: 'fetchOptionsContext',
+                fetchOptionsSetup: 'fetchOptionsSetup',
+                fetchOptions: 'fetchOptions',
+              },
+            },
+          },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+        'accept: application/json',
+        'authorization: fetch user',
+        'context: context',
+        'fetchoptions: fetchOptions',
+        'fetchoptionscontext: in-context duplicate fetchOptionsContext, fetchOptionsContext',
+        'fetchoptionssetup: in-setup duplicate fetchOptionsSetup, fetchOptionsSetup',
+        'setup: setup, in-context duplicate setup',
+      ]);
+    });
     it('respects context-provided header-merge policy', async () => {
       expect.assertions(2);
 
@@ -2389,6 +2579,14 @@ describe('Query options', () => {
           operationName: 'postTitle',
           query: postTitleQuery,
           variables: { id: '1' },
+          context: {
+            fetchOptions: {
+              headers: {
+                authorization: 'fetchOptions',
+                fetchOptions: 'fetchOptions',
+              },
+            },
+          },
         }),
       );
 
@@ -2399,6 +2597,7 @@ describe('Query options', () => {
             authorization: 'initial setup',
             setup: 'setup',
             context: 'context',
+            fetchoptions: 'fetchOptions',
           }),
         }),
       );
@@ -2495,6 +2694,196 @@ describe('Query options', () => {
       expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
         'accept: application/json',
       ]);
+    });
+  });
+  describe('body', () => {
+    it('logs a warning that the fetchOptions body is ignored', async () => {
+      jest.spyOn(console, 'warn').mockImplementation();
+
+      const link = new RestLink({
+        uri: '/api',
+      });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.post('/api/posts/new', post);
+
+      const createPostMutation = gql`
+        fragment Item on any {
+          name: String
+        }
+
+        fragment PublishablePostInput on REST {
+          id: String
+          title: String
+          items {
+            ...Item
+          }
+        }
+
+        mutation publishPost($input: PublishablePostInput!) {
+          publishedPost(input: $input)
+            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            id
+            title
+            items
+          }
+        }
+      `;
+
+      await toPromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: createPostMutation,
+          variables: {
+            input: { id: '1', title: 'title', items: [{ name: 'name' }] },
+          },
+          context: {
+            fetchOptions: {
+              body: 'my-body',
+            },
+          },
+        }),
+      );
+
+      const body = fetchMock.lastCall()[1].body;
+      expect(body).toBe(
+        JSON.stringify({ id: '1', title: 'title', items: [{ name: 'name' }] }),
+      );
+      expect(console.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Passing a `body` in `fetchOptions` is not supported. Please use the @rest() directive instead.',
+        ),
+      );
+    });
+  });
+  describe('fetchOptions', () => {
+    const posts = [
+      { title: 'Love apollo' },
+      { title: 'Respect apollo', meta: { creatorId: 1 } },
+    ];
+    it('should fulfill fetch when an AbortController signal is passed but never aborted', done => {
+      fetchMock.get('/api/posts', posts);
+      const link = new RestLink({ uri: '/api' });
+
+      const query = gql`
+        query {
+          people @rest(type: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+
+      const controller = new AbortController();
+      const reqPromise = toPromise<Result>(
+        execute(link, {
+          operationName: 'abortQuery',
+          query,
+          context: { fetchOptions: { signal: controller.signal } },
+        }),
+      );
+
+      const timeout = setTimeout(() => {
+        done('timeout should never run');
+      }, 100);
+
+      return reqPromise.then(res => {
+        clearTimeout(timeout);
+        expect(res.data).toEqual({
+          people: [
+            { title: 'Love apollo', __typename: 'Post' },
+            { title: 'Respect apollo', __typename: 'Post' },
+          ],
+        });
+        done();
+      });
+    });
+    it('should cancel fetch when an AbortController signal is passed and aborted', done => {
+      fetchMock.get('/api/posts', posts);
+      const link = new RestLink({ uri: '/api' });
+
+      const query = gql`
+        query {
+          people @rest(ftype: "[Post]", path: "/posts") {
+            title
+          }
+        }
+      `;
+
+      const controller = new AbortController();
+      const reqPromise = toPromise<Result>(
+        execute(link, {
+          operationName: 'abortQuery',
+          query,
+          context: { fetchOptions: { signal: controller.signal } },
+        }),
+      );
+      controller.abort();
+
+      let reqData = null;
+      const timeout = setTimeout(() => {
+        expect(reqData).toBeNull();
+        done();
+      }, 100);
+
+      return reqPromise.then(res => {
+        clearTimeout(timeout);
+        reqData = res.data;
+        done('fetch request should not resolve');
+      });
+    });
+    it('passes all fetchOptions to the fetch call', async () => {
+      const link = new RestLink({
+        uri: '/api',
+      });
+
+      const post = { id: '1', title: 'Love apollo' };
+      fetchMock.get('/api/post/1', post);
+
+      const postTitleQuery = gql`
+        query postTitle {
+          post(id: "1") @rest(type: "Post", path: "/post/:id") {
+            id
+            title
+          }
+        }
+      `;
+
+      const abortController = new AbortController();
+      await toPromise<Result>(
+        execute(link, {
+          operationName: 'postTitle',
+          query: postTitleQuery,
+          variables: { id: '1' },
+          context: {
+            fetchOptions: {
+              cache: 'no-cache',
+              integrity: 'integrity-hash',
+              keepalive: true,
+              mode: 'same-origin',
+              redirect: 'follow',
+              referrer: 'referrer',
+              referrerPolicy: 'origin',
+              signal: abortController.signal,
+              window: null,
+            },
+          },
+        }),
+      );
+
+      const requestCall = fetchMock.calls('/api/post/1')[0];
+      expect(requestCall[1]).toEqual(
+        expect.objectContaining({
+          cache: 'no-cache',
+          integrity: 'integrity-hash',
+          keepalive: true,
+          mode: 'same-origin',
+          redirect: 'follow',
+          referrer: 'referrer',
+          referrerPolicy: 'origin',
+          signal: abortController.signal,
+          window: null,
+        }),
+      );
     });
   });
 });
@@ -3577,7 +3966,9 @@ describe('validateRequestMethodForOperationType', () => {
       expect.assertions(1);
       expect(() =>
         validateRequestMethodForOperationType('GIBBERISH', 'mutation'),
-      ).toThrowError('"mutation" operations do not support that HTTP-verb');
+      ).toThrowError(
+        '"mutation" operations do not support the GIBBERISH method; please use one of GET, POST, PUT, PATCH, DELETE',
+      );
     });
   });
   describe('for operation type "subscription"', () => {
