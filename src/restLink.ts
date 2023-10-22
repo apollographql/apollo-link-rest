@@ -220,6 +220,13 @@ export namespace RestLink {
      * Parse the response body of an HTTP request into the format that Apollo expects.
      */
     responseTransformer?: ResponseTransformer;
+
+    /**
+     * When set to true, enables you to supply multiple instances of RestLink in your setup. 
+     * Useful for interacting with backends that would require different headers or other configs
+     * This option assumes you are not using default URI's
+     */
+    enableRestLinkChaining?: boolean;
   };
 
   /** @rest(...) Directive Options */
@@ -1174,11 +1181,27 @@ const DEFAULT_JSON_SERIALIZER: RestLink.Serializer = (
   };
 };
 
-const CONNECTION_REMOVE_CONFIG = {
-  test: (directive: DirectiveNode) => directive.name.value === 'rest',
-  remove: true,
-};
-
+const CONNECTION_REMOVE_CONFIG = (endpoints: Record<string, any>, enableRestLinkChaining: boolean, removeRestLinksThatHaveEndpoints: boolean) => {
+   return {
+    test: (directive: DirectiveNode) => {
+      /** Composability Modification
+       * if we can't find an endpoint associated with this restlink, then assume the next restlink will define it
+       * and don't remove the current restlink directive
+       */
+      const foundEndpoint = directive.arguments.find(val => {
+        if (val.name.value === 'endpoint' && Object.keys(endpoints).includes(val.value.value)) {
+          return val;
+        }
+      });
+      const isRestDirective = directive.name.value === 'rest';
+      if (!enableRestLinkChaining) {
+        return isRestDirective;
+      }
+      return isRestDirective && (removeRestLinksThatHaveEndpoints ? foundEndpoint : !foundEndpoint);
+    },
+    remove: true,
+  };
+}
 /**
  * RestLink is an apollo-link for communicating with REST services using GraphQL on the client-side
  */
@@ -1193,6 +1216,7 @@ export class RestLink extends ApolloLink {
   private readonly serializers: RestLink.Serializers;
   private readonly responseTransformer: RestLink.ResponseTransformer;
   private readonly processedDocuments: Map<DocumentNode, DocumentNode>;
+  private readonly enableRestLinkChaining?: boolean;
 
   constructor({
     uri,
@@ -1206,6 +1230,7 @@ export class RestLink extends ApolloLink {
     bodySerializers,
     defaultSerializer,
     responseTransformer,
+    enableRestLinkChaining
   }: RestLink.Options) {
     super();
     const fallback = {};
@@ -1218,6 +1243,13 @@ export class RestLink extends ApolloLink {
       );
     }
     if (uri != null) {
+      if (enableRestLinkChaining) {
+        /** 
+         * since chaining relies on not removing directives that have undefined endpoints and a default URI means all endpoints are defined, we can't pass these two options together
+         * you may set enableRestLinkChaining to false (or leave it undefined) on your terminal RestLink if you want a default URI for any unmatched endpoints
+         */
+        throw new Error("enableRestLinkChaining is not a valid option when passing a default URI");
+      }
       const currentDefaultURI = (endpoints || {})[DEFAULT_ENDPOINT_KEY];
       if (currentDefaultURI != null && currentDefaultURI != uri) {
         throw new Error(
@@ -1295,18 +1327,24 @@ export class RestLink extends ApolloLink {
     this.processedDocuments = new Map();
   }
 
-  private removeRestSetsFromDocument(query: DocumentNode): DocumentNode {
-    const cached = this.processedDocuments.get(query);
+  private removeRestSetsFromDocument(query: DocumentNode, removeRestLinksThatHaveEndpoints: boolean): DocumentNode {
+    /** Composability Modification:
+     * the original code removed all of the rest links - when we added the ability to only remove some of
+     * the rest links, the cache key can no longer be just "query" because the response can be different for
+     * the same query (depending on if we remove rest links that have defined endpoints)
+     */
+    const cacheKey = query + removeRestLinksThatHaveEndpoints;
+    const cached = this.processedDocuments.get(cacheKey);
     if (cached) return cached;
 
     checkDocument(query);
 
     const docClone = removeDirectivesFromDocument(
-      [CONNECTION_REMOVE_CONFIG],
+      [CONNECTION_REMOVE_CONFIG(this.endpoints, this.enableRestLinkChaining, removeRestLinksThatHaveEndpoints)],
       query,
     );
 
-    this.processedDocuments.set(query, docClone);
+    this.processedDocuments.set(cacheKey, docClone);
     return docClone;
   }
 
@@ -1314,15 +1352,26 @@ export class RestLink extends ApolloLink {
     operation: Operation,
     forward?: NextLink,
   ): Observable<FetchResult> | null {
-    const { query, variables, getContext, setContext } = operation;
+    const { variables, getContext } = operation;
+    let query = operation.query;
     const context: LinkChainContext | any = getContext() as any;
     const isRestQuery = hasDirectives(['rest'], query);
     if (!isRestQuery) {
       return forward(operation);
     }
-
-    const nonRest = this.removeRestSetsFromDocument(query);
-
+    
+    /** Composability Modification:
+     * nonRest is the query forwarded to the next link. We want to keep the restLinks
+     * in that query that don't have endpoints defined because we're going to assume
+     * that the next link in the chain will handle thos
+     */
+    const nonRest = this.removeRestSetsFromDocument(query, true);
+    /** Composability Modification:
+     * we want to remove the rest links that don't have an endpoint defined
+     * because otherwise, they'll be requested with an "undefined" in the url
+     */
+    query = this.removeRestSetsFromDocument(query, false);
+    
     // 1. Use the user's merge policy if any
     let headersMergePolicy: RestLink.HeadersMergePolicy =
       context.headersMergePolicy;
@@ -1393,12 +1442,20 @@ export class RestLink extends ApolloLink {
             resolverOptions,
           )
             .then(data => {
-              setContext({
-                restResponses: (context.restResponses || []).concat(
+              operation.setContext({
+                /**
+                 * get the context fresh since it could have changed between when it was cached above
+                 */
+                data: Object.assign((operation.getContext().data || {}), data),
+                restResponses: (operation.getContext().restResponses || []).concat(
                   requestContext.responses,
                 ),
               });
-              observer.next({ data, errors });
+              /** Composability Modification:
+               * the next field merge operations on the query need all of the data in order to fill in the fields
+               * previously there was only one data response so this didn't matter
+               */
+              observer.next({ data: operation.getContext().data, errors });
               observer.complete();
             })
             .catch(err => {
