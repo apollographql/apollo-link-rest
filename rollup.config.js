@@ -5,8 +5,6 @@ const globals = {
   '@apollo/client/core': 'apolloClient.core',
   '@apollo/client/utilities': 'apolloClient.utilities',
   '@apollo/link-error': 'apolloLink.error',
-  'graphql-anywhere': 'graphqlAnywhere',
-  'graphql-anywhere/lib/async': 'graphqlAnywhere.async',
 };
 
 export default {

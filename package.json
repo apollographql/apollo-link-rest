@@ -1,6 +1,6 @@
 {
   "name": "apollo-link-rest",
-  "version": "0.9.0-rc.1",
+  "version": "0.9.0",
   "description": "Query existing REST services with GraphQL",
   "license": "MIT",
   "main": "./lib/bundle.umd.js",
@@ -16,10 +16,11 @@
   },
   "homepage": "https://github.com/apollographql/apollo-link-rest#readme",
   "scripts": {
-    "build:browser": "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i @apollo/client/core --i @apollo/client/utilities --i apollo-utilities --i graphql --i react && npm run minify:browser",
+    "build:browser": "browserify ./lib/bundle.umd.js -o=./lib/bundle.js --i @apollo/client/core --i @apollo/client/utilities --i graphql --i react && npm run minify:browser",
     "build": "tsc -p .",
     "bundle": "rollup -c",
     "clean": "rimraf lib/* coverage/* npm/*",
+    "clean:modules": "rm -rf node_modules/",
     "coverage:upload": "codecov",
     "danger": "danger run --verbose",
     "deploy": "./scripts/deploy.sh",
@@ -45,7 +46,6 @@
   "peerDependencies": {
     "@apollo/client": ">=3",
     "graphql": ">=0.11",
-    "graphql-anywhere": ">=4",
     "qs": ">=6"
   },
   "devDependencies": {
@@ -63,7 +63,6 @@
     "danger": "6.x",
     "fetch-mock": "7.x",
     "graphql": "14.x",
-    "graphql-anywhere": "4.1.x",
     "isomorphic-fetch": "2.2.x",
     "jest": "23.x",
     "jest-fetch-mock": "2.x",

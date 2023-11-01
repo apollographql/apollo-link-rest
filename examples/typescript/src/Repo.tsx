@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { graphql, ChildProps } from 'react-apollo';
+import { graphql, ChildProps } from '@apollo/client/react/hoc';
 import gql from 'graphql-tag';
 
 // The Result type we expect back.
@@ -60,7 +60,7 @@ const query = gql`
 // and inject the data into the component. The Result type is what
 // we expect the shape of the response to be and OwnProps is what we
 // expect to be passed to this component.
-const Repo = graphql<Result, OwnProps>(query, {
+const Repo = graphql<OwnProps>(query, {
   options: ({ name }) => ({ variables: { name } }),
 })(RepoBase);
 

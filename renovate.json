@@ -1,12 +1,22 @@
 {
-  "pinVersions": true,
-  "semanticCommits": true,
-  "depTypes": [{ "depType": "dependencies", "pinVersions": false }],
+  "rangeStrategy": "pin",
+  "semanticCommits": "enabled",
+  "packageRules": [
+    {
+      "rangeStrategy": "replace",
+      "matchDepTypes": ["dependencies"]
+    }
+  ],
   "timezone": "America/Los_Angeles",
-  "schedule": ["after 10pm and before 5am on every weekday"],
-  "rebaseStalePrs": true,
+  "schedule": ["after 10pm every weekday", "before 5am every weekday"],
+  "rebaseWhen": "behind-base-branch",
   "prCreation": "not-pending",
-  "automerge": "minor",
+  "minor": {
+    "automerge": true
+  },
+  "major": {
+    "automerge": false
+  },
   "labels": ["tooling", "dependencies"],
   "assignees": ["@fbartho"],
   "reviewers": ["@fbartho"]

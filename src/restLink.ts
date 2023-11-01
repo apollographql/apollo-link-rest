@@ -28,11 +28,27 @@ import {
   checkDocument,
   removeDirectivesFromDocument,
 } from '@apollo/client/utilities';
-
-import { graphql } from 'graphql-anywhere/lib/async';
-import { Resolver, ExecInfo } from 'graphql-anywhere';
-
+import { graphql } from './utils/graphql';
 import * as qs from 'qs';
+
+export type DirectiveInfo = {
+  [fieldName: string]: { [argName: string]: any };
+};
+
+export type ExecInfo = {
+  isLeaf: boolean;
+  resultKey: string;
+  directives: DirectiveInfo;
+  field: FieldNode;
+};
+
+export type Resolver = (
+  fieldName: string,
+  rootValue: any,
+  args: any,
+  context: any,
+  info: ExecInfo,
+) => any;
 
 export namespace RestLink {
   export type URI = string;

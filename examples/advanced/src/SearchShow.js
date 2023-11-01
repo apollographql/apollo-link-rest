@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { graphql } from 'react-apollo';
+import { graphql } from '@apollo/client/react/hoc';
 import gql from 'graphql-tag';
 
 const Season = ({ summary, number, image }) => (
@@ -27,7 +27,9 @@ const Query = gql`
 
 class ShowsResult extends Component {
   render() {
-    const { data: { loading, error, show } } = this.props;
+    const {
+      data: { loading, error, show },
+    } = this.props;
     if (loading) {
       return <h4>Loading...</h4>;
     }
