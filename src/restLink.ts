@@ -830,6 +830,11 @@ interface LinkChainContext {
 
   /** An array of the responses from each fetched URL, useful for accessing headers in earlier links */
   restResponses?: Response[];
+
+  /** Overrides some fetch options arguments passed to the fetch call */
+  fetchOptions?: {
+    signal?: AbortSignal;
+  };
 }
 
 /** Context passed via graphql() to our resolver */
@@ -856,6 +861,8 @@ interface RequestContext {
 
   /** An array of the responses from each fetched URL */
   responses: Response[];
+
+  signal?: AbortSignal;
 }
 
 const addTypeToNode = (node, typename) => {
@@ -940,6 +947,7 @@ const resolver: Resolver = async (
     fieldNameNormalizer: linkLevelNameNormalizer,
     fieldNameDenormalizer: linkLevelNameDenormalizer,
     serializers,
+    signal,
     responseTransformer,
   } = context;
 
@@ -1076,6 +1084,7 @@ const resolver: Resolver = async (
     // Only set credentials if they're non-null as some browsers throw an exception:
     // https://github.com/apollographql/apollo-link-rest/issues/121#issuecomment-396049677
     ...(credentials ? { credentials } : {}),
+    ...(signal ? { signal } : {}),
   };
   const requestUrl = `${endpointOption.uri}${pathWithParams}`;
 
@@ -1348,6 +1357,8 @@ export class RestLink extends ApolloLink {
 
     const credentials: RequestCredentials =
       context.credentials || this.credentials;
+    const signal: AbortSignal | undefined =
+      context.fetchOptions != null ? context.fetchOptions.signal : undefined;
 
     const queryWithTypename = addTypenameToDocument(query);
 
@@ -1371,6 +1382,7 @@ export class RestLink extends ApolloLink {
       fragmentDefinitions,
       typePatcher: this.typePatcher,
       serializers: this.serializers,
+      signal,
       responses: [],
       responseTransformer: this.responseTransformer,
     };
