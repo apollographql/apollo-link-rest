@@ -49,8 +49,8 @@
     "qs": ">=6"
   },
   "devDependencies": {
-    "@apollo/client": "^3.0.0-beta.29",
-    "@apollo/link-error": "^2.0.0-beta.3",
+    "@apollo/client": "3.11.8",
+    "@apollo/link-error": "2.0.0-beta.3",
     "@babel/core": "7.x",
     "@types/graphql": "14.x",
     "@types/jest": "23.x",
