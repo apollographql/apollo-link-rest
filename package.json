@@ -7,6 +7,7 @@
   "module": "./lib/index.js",
   "jsnext:main": "./lib/index.js",
   "typings": "./lib/index.d.ts",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/apollographql/apollo-link-rest.git"
@@ -73,7 +74,7 @@
     "prettier": "1.15.x",
     "qs": "6.6.x",
     "rimraf": "2.6.x",
-    "rollup": "0.67.x",
+    "rollup": "^4.53.2",
     "rollup-plugin-local-resolve": "1.0.x",
     "rollup-plugin-sourcemaps": "0.4.x",
     "rxjs": "^7.8.2",
