@@ -9,9 +9,9 @@ module.exports = {
       },
       diagnostics: {
         ignoreCodes: [
-          151001 // Suppress esModuleInterop suggestion that breaks __tests__/restLink.ts
-        ]
-      }
+          151001, // Suppress esModuleInterop suggestion that breaks __tests__/restLink.ts
+        ],
+      },
     },
   },
   transform: {
@@ -20,4 +20,5 @@ module.exports = {
   testRegex: '(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   setupFiles: ['./scripts/jest.js'],
+  testEnvironment: 'jsdom',
 };
