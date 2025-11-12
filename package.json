@@ -49,11 +49,10 @@
     "qs": ">=6"
   },
   "devDependencies": {
-    "@apollo/client": "3.0.0-beta.29",
-    "@apollo/link-error": "^2.0.0-beta.3",
+    "@apollo/client": "4.0.9",
     "@babel/core": "7.x",
-    "@types/graphql": "14.x",
     "@types/jest": "23.x",
+    "@types/minimatch": "^3.0.5",
     "@types/node": "10.x",
     "@types/qs": "6.5.x",
     "browserify": "16.2.x",
@@ -62,7 +61,7 @@
     "codecov": "3.x",
     "danger": "6.x",
     "fetch-mock": "7.x",
-    "graphql": "14.x",
+    "graphql": "16.x",
     "isomorphic-fetch": "2.2.x",
     "jest": "23.x",
     "jest-fetch-mock": "2.x",
@@ -76,11 +75,11 @@
     "rollup": "0.67.x",
     "rollup-plugin-local-resolve": "1.0.x",
     "rollup-plugin-sourcemaps": "0.4.x",
+    "rxjs": "^7.8.2",
     "snake-case": "2.1.x",
     "ts-jest": "23.10.x",
     "typescript": "3.x",
-    "uglify-js": "3.4.x",
-    "@types/minimatch": "^3.0.5"
+    "uglify-js": "3.4.x"
   },
   "resolutions": {
     "babel-core": "7.0.0-bridge.0",
