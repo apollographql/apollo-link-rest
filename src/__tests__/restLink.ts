@@ -8,8 +8,11 @@ import {
   InMemoryCache,
   ServerError,
 } from '@apollo/client/core';
-import * as camelCase from 'camelcase';
-import * as fetchMock from 'fetch-mock';
+import fetchMock from '@fetch-mock/jest';
+import {
+  camelCase as camelCaseOfficial,
+  snakeCase as snake_case_official,
+} from 'change-case';
 import {
   normalizeHeaders,
   RestLink,
@@ -19,20 +22,57 @@ import { firstValueFrom, map } from 'rxjs';
 import { OperationTypeNode } from 'graphql/language';
 import { ErrorLink } from '@apollo/client/link/error';
 
+// the official apis have an extra argument that would conflict (via typescript)
+function camelCase(str: string): string {
+  return camelCaseOfficial(str);
+}
+function snake_case(str: string): string {
+  return snake_case_official(str);
+}
+
 disableFragmentWarnings();
 
-const snake_case = require('snake-case');
+// Configure fetchMock with the original fetch before mocking
+// This ensures unmockGlobal() can restore it properly
+if (!fetchMock.config.fetch && typeof fetch !== 'undefined') {
+  fetchMock.config.fetch = fetch;
+}
+
+// Use fetchMock's fetchHandler as the mocked fetch
+// This is more reliable than mockGlobal() in ESM environment
+if (typeof (globalThis as any).__setMockFetch === 'function') {
+  (globalThis as any).__setMockFetch(fetchMock.fetchHandler.bind(fetchMock));
+} else {
+  // Fallback to mockGlobal if __setMockFetch isn't available
+  fetchMock.mockGlobal();
+}
 
 /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
 function flattenHeaders({
   headers,
 }: {
-  headers: Headers;
+  headers?:
+    | Headers
+    | Record<string, string>
+    | Array<[string, string]>
+    | undefined;
 }): { [key: string]: string } {
   const headersFlattened: { [key: string]: string } = {};
-  headers.forEach((value, key) => {
-    headersFlattened[key] = value;
-  });
+  if (Array.isArray(headers)) {
+    headers.forEach(([key, value]) => {
+      headersFlattened[key] = value;
+    });
+  } else {
+    if (headers instanceof Headers) {
+      headers.forEach((value, key) => {
+        headersFlattened[key] = value;
+      });
+    } else {
+      Object.entries(headers || {}).forEach(([key, value]) => {
+        headersFlattened[key] = value;
+      });
+    }
+  }
   return headersFlattened;
 }
 
@@ -40,12 +80,28 @@ function flattenHeaders({
 function orderDupPreservingFlattenedHeaders({
   headers,
 }: {
-  headers: Headers;
+  headers?:
+    | Headers
+    | Record<string, string>
+    | Array<[string, string]>
+    | undefined;
 }): string[] {
   const orderedFlattened: string[] = [];
-  headers.forEach((value, key) => {
-    orderedFlattened.push(`${key}: ${value}`);
-  });
+  if (Array.isArray(headers)) {
+    headers.forEach(([key, value]) => {
+      orderedFlattened.push(`${key}: ${value}`);
+    });
+  } else {
+    if (headers instanceof Headers) {
+      headers.forEach((value, key) => {
+        orderedFlattened.push(`${key}: ${value}`);
+      });
+    } else {
+      Object.entries(headers || {}).forEach(([key, value]) => {
+        orderedFlattened.push(`${key}: ${value}`);
+      });
+    }
+  }
   return orderedFlattened;
 }
 
@@ -67,7 +123,7 @@ const dummyClient = new ApolloClient({
 describe('Configuration', () => {
   describe('Errors', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
 
     it('throws without any config', () => {
@@ -175,7 +231,7 @@ describe('Configuration', () => {
 
   describe('Field name normalizer', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('should apply fieldNameNormalizer if specified', async () => {
       expect.assertions(3);
@@ -354,7 +410,7 @@ describe('Configuration', () => {
 
   describe('Custom fetch', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('should apply customFetch if specified', async () => {
       expect.assertions(1);
@@ -970,7 +1026,7 @@ describe('Complex responses need nested __typename insertions', () => {
 
 describe('Can customize/parse the response before passing to Apollo', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   const posts = [
@@ -1132,7 +1188,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
 describe('Query single call', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('can run a simple query', async () => {
@@ -1662,7 +1718,7 @@ describe('Query single call', () => {
 
 describe('Use a custom pathBuilder', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
   it('in a basic way', async () => {
     expect.assertions(4);
@@ -1829,7 +1885,11 @@ describe('Use a custom pathBuilder', () => {
       ),
     );
 
-    expect(fetchMock.called('/api/posts?name=Love apollo')).toBe(true);
+    expect(
+      fetchMock.callHistory.called(
+        'http://localhost/api/posts?name=Love apollo',
+      ),
+    ).toBe(true);
 
     await firstValueFrom<Result>(
       execute(
@@ -1842,7 +1902,11 @@ describe('Use a custom pathBuilder', () => {
       ),
     );
 
-    expect(fetchMock.called('/api/posts?name=Love%20apollo')).toBe(true);
+    expect(
+      fetchMock.callHistory.called(
+        'http://localhost/api/posts?name=Love%20apollo',
+      ),
+    ).toBe(true);
 
     await firstValueFrom<Result>(
       execute(
@@ -1855,7 +1919,9 @@ describe('Use a custom pathBuilder', () => {
       ),
     );
 
-    expect(fetchMock.called('/api/posts/1?comments=5')).toBe(true);
+    expect(
+      fetchMock.callHistory.called('http://localhost/api/posts/1?comments=5'),
+    ).toBe(true);
   });
   // TODO: Test for Path using context
   // TODO: Test for PathBuilder using replacer
@@ -1864,7 +1930,7 @@ describe('Use a custom pathBuilder', () => {
 
 describe('Query multiple calls', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('can run a query with multiple rest calls', async () => {
@@ -1984,7 +2050,7 @@ describe('Query multiple calls', () => {
 
 describe('GraphQL aliases should work', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('outer-level aliases are supported', async () => {
@@ -2061,7 +2127,7 @@ describe('GraphQL aliases should work', () => {
 
 describe('Query options', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
   describe('credentials', () => {
     it('adds credentials to the request from the setup', async () => {
@@ -2087,7 +2153,7 @@ describe('Query options', () => {
         ),
       );
 
-      const credentials = fetchMock.lastCall()[1].credentials;
+      const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
     });
 
@@ -2125,7 +2191,7 @@ describe('Query options', () => {
         ),
       );
 
-      const credentials = fetchMock.lastCall()[1].credentials;
+      const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
     });
 
@@ -2166,7 +2232,7 @@ describe('Query options', () => {
         ),
       );
 
-      const credentials = fetchMock.lastCall()[1].credentials;
+      const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
     });
 
@@ -2178,9 +2244,9 @@ describe('Query options', () => {
           map(result => {
             const { restResponses } = operation.getContext();
             expect(restResponses).toHaveLength(2);
-            expect(restResponses[0].url).toBe('/api/post/1');
+            expect(restResponses[0].url).toBe('http://localhost/api/post/1');
             expect(restResponses[0].headers.get('Header1')).toBe('Header1');
-            expect(restResponses[1].url).toBe('/api/tags');
+            expect(restResponses[1].url).toBe('http://localhost/api/tags');
             expect(restResponses[1].headers.get('Header2')).toBe('Header2');
             return result;
           }),
@@ -2259,9 +2325,11 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'GET' }),
+      const requestCall = fetchMock.callHistory.calls(
+        'http://localhost/api/post/1',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'get' }),
       );
     });
 
@@ -2293,9 +2361,9 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'GET' }),
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'get' }),
       );
     });
   });
@@ -2332,13 +2400,13 @@ describe('Query options', () => {
         execute(link2, operation, { client: dummyClient }),
       );
 
-      const requestCalls = fetchMock.calls('/api/posts');
-      expect(orderDupPreservingFlattenedHeaders(requestCalls[0][1])).toEqual([
-        'accept: application/json',
-      ]);
-      expect(orderDupPreservingFlattenedHeaders(requestCalls[1][1])).toEqual([
-        'accept: text/plain',
-      ]);
+      const requestCalls = fetchMock.callHistory.calls('/api/posts');
+      expect(
+        orderDupPreservingFlattenedHeaders(requestCalls[0].options),
+      ).toEqual(['accept: application/json']);
+      expect(
+        orderDupPreservingFlattenedHeaders(requestCalls[1].options),
+      ).toEqual(['accept: text/plain']);
     });
     it('adds headers to the request from the context', async () => {
       expect.assertions(2);
@@ -2383,8 +2451,8 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall.options)).toEqual([
         'accept: application/json',
         'authorization: 1234',
       ]);
@@ -2418,8 +2486,8 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall.options) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             authorization: '1234',
@@ -2479,8 +2547,8 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall.options)).toEqual([
         'accept: application/json',
         'authorization: 1234',
         'context: context',
@@ -2547,8 +2615,8 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall.options) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             authorization: 'initial setup',
@@ -2604,16 +2672,11 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      const { headers } = requestCall[1];
-      const orderedFlattened = [];
-      headers.forEach((value, key) => {
-        orderedFlattened.push(`${key}: ${value}`);
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(flattenHeaders(requestCall.options)).toEqual({
+        accept: 'application/json',
+        authorization: 'initial setup, context',
       });
-      expect(orderedFlattened).toEqual([
-        'accept: application/json',
-        'authorization: initial setup, context',
-      ]);
     });
     it('generates a new headers object if headers are undefined', async () => {
       const headersMiddleware = new ApolloLink((operation, forward) => {
@@ -2656,8 +2719,8 @@ describe('Query options', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall.options)).toEqual([
         'accept: application/json',
       ]);
     });
@@ -2667,7 +2730,7 @@ describe('Query options', () => {
 describe('Mutation', () => {
   describe('basic support', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('supports POST requests', async () => {
       expect.assertions(2);
@@ -2686,7 +2749,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            @rest(type: "Post", path: "/posts/new", method: "post") {
             id
             title
           }
@@ -2704,9 +2767,9 @@ describe('Mutation', () => {
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
     });
     it('supports PUT requests', async () => {
@@ -2745,9 +2808,9 @@ describe('Mutation', () => {
       );
       expect(response.data.replacedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'PUT' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'put' }),
       );
     });
     it('supports PATCH requests', async () => {
@@ -2788,9 +2851,9 @@ describe('Mutation', () => {
       );
       expect(response.data.editedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'PATCH' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'patch' }),
       );
     });
     it('supports DELETE requests', async () => {
@@ -2821,16 +2884,16 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'DELETE' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'delete' }),
       );
     });
   });
 
   describe('empty response bodies', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
 
     it('returns an empty object on 204 status', async () => {
@@ -2853,7 +2916,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts", method: "POST") {
+            @rest(type: "Post", path: "/posts", method: "post") {
             id
             title
           }
@@ -2897,7 +2960,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts", method: "POST") {
+            @rest(type: "Post", path: "/posts", method: "post") {
             id
             title
           }
@@ -2939,7 +3002,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts", method: "POST") {
+            @rest(type: "Post", path: "/posts", method: "post") {
             title
           }
         }
@@ -2983,7 +3046,7 @@ describe('Mutation', () => {
 
       mutation publishPost($input: PublishablePostInput!) {
         publishedPost(input: $input)
-          @rest(type: "Post", path: "/posts", method: "POST") {
+          @rest(type: "Post", path: "/posts", method: "post") {
           id
           title
         }
@@ -3007,7 +3070,7 @@ describe('Mutation', () => {
 
   describe('fieldNameDenormalizer', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('corrects names to snake_case for link-level denormalizer', async () => {
       expect.assertions(3);
@@ -3033,7 +3096,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            @rest(type: "Post", path: "/posts/new", method: "post") {
             id
             titleString
             categoryId
@@ -3051,14 +3114,16 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
 
-      expect(requestCall[1]).toEqual(
+      expect(requestCall.options).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          method: 'post',
         }),
       );
-      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+      expect(JSON.parse(String(requestCall.options.body || ''))).toMatchObject(
+        intermediatePost,
+      );
 
       expect(response.data.publishedPost).toEqual(
         expect.objectContaining(resultPost),
@@ -3090,7 +3155,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/new"
-              method: "POST"
+              method: "post"
               fieldNameDenormalizer: $requestLevelDenormalizer
             ) {
             id
@@ -3113,14 +3178,16 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
 
-      expect(requestCall[1]).toEqual(
+      expect(requestCall.options).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          method: 'post',
         }),
       );
-      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+      expect(JSON.parse(String(requestCall.options.body || ''))).toMatchObject(
+        intermediatePost,
+      );
 
       expect(response.data.publishedPost).toEqual(
         expect.objectContaining(resultPost),
@@ -3129,7 +3196,7 @@ describe('Mutation', () => {
   });
   describe('bodyKey/bodyBuilder', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it("if using the regular JSON bodyBuilder it doesn't stack multiple content-type headers", async () => {
       const CUSTOM_JSON_CONTENT_TYPE = 'my-custom-json-ish-content-type';
@@ -3161,7 +3228,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "post") {
             id
             title
             items
@@ -3179,8 +3246,10 @@ describe('Mutation', () => {
           { client: dummyClient },
         ),
       );
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1].headers.get('content-type')).toEqual(
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect((requestCall.options.headers as any)['content-type']).toEqual(
         CUSTOM_JSON_CONTENT_TYPE,
       );
     });
@@ -3216,7 +3285,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "post") {
             id
             title
             items
@@ -3236,11 +3305,13 @@ describe('Mutation', () => {
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(JSON.stringify(post));
+      expect(requestCall.options.body).toEqual(JSON.stringify(post));
     });
 
     it('respects bodyKey for mutations', async () => {
@@ -3265,7 +3336,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/new"
-              method: "POST"
+              method: "post"
               bodyKey: "someApiWithACustomBodyKey"
             ) {
             id
@@ -3285,9 +3356,9 @@ describe('Mutation', () => {
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
     });
     it('respects bodyBuilder for mutations', async () => {
@@ -3313,7 +3384,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/new"
-              method: "POST"
+              method: "post"
               bodyBuilder: $customBuilder
             ) {
             id
@@ -3340,10 +3411,10 @@ describe('Mutation', () => {
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
-      expect(requestCall[1]).toEqual(
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
+      expect(requestCall.options).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          method: 'post',
           body: JSON.stringify(
             fakeEncryption({
               args: { input: { title: post.title } },
@@ -3366,7 +3437,7 @@ describe('Mutation', () => {
       const getPostQuery = gql`
         query getPost($id: ID!) {
           post(input: { id: $id })
-            @rest(type: "Post", path: "/post-to-get-post", method: "POST") {
+            @rest(type: "Post", path: "/post-to-get-post", method: "post") {
             id
             title
           }
@@ -3386,11 +3457,13 @@ describe('Mutation', () => {
 
       expect(response.data.post).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/post-to-get-post')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/post-to-get-post',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(JSON.stringify({ id: '1' }));
+      expect(requestCall.options.body).toEqual(JSON.stringify({ id: '1' }));
     });
     it('throws when no body input is provided for HTTP methods other than GET or DELETE', async () => {
       expect.assertions(1);
@@ -3399,7 +3472,7 @@ describe('Mutation', () => {
 
       const createPostMutation = gql`
         mutation createPost {
-          sendPost @rest(type: "Post", path: "/posts/new", method: "POST") {
+          sendPost @rest(type: "Post", path: "/posts/new", method: "post") {
             id
             title
           }
@@ -3415,10 +3488,8 @@ describe('Mutation', () => {
           { client: dummyClient },
         ),
       ).catch(e =>
-        expect(e).toEqual(
-          new Error(
-            '[GraphQL POST mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
-          ),
+        expect(e).toMatchInlineSnapshot(
+          `[Error: [GraphQL post mutation using a REST call without a body]. No \`input\` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.]`,
         ),
       );
     });
@@ -3428,7 +3499,7 @@ describe('Mutation', () => {
 
   describe('bodySerializer', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
 
     it('defaults to json serialization for objects', async () => {
@@ -3460,7 +3531,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "post") {
             id
             title
             items
@@ -3479,11 +3550,13 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(JSON.stringify(post));
+      expect(requestCall.options.body).toEqual(JSON.stringify(post));
     });
 
     it('respects custom body serializers keys', async () => {
@@ -3532,7 +3605,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: "const"
             ) {
             id
@@ -3553,12 +3626,14 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(42);
-      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+      expect(requestCall.options.body).toEqual(42);
+      expect({ headers: flattenHeaders(requestCall.options) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             'content-type': 'text/plain',
@@ -3613,7 +3688,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: $bodySerializer
             ) {
             id
@@ -3624,7 +3699,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: "fake"
             ) {
             id
@@ -3645,17 +3720,20 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(42);
-
-      const secondRequestCall = fetchMock.calls('/api/posts/newComplexPost')[1];
-      expect(secondRequestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      expect(requestCall.options.body).toEqual(42);
+      const secondRequestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[1];
+      expect(secondRequestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(secondRequestCall[1].body).toEqual(
+      expect(secondRequestCall.options.body).toEqual(
         expect.objectContaining({ isFake: true }),
       );
     });
@@ -3725,7 +3803,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: "upFiles"
             ) {
             id
@@ -3748,14 +3826,16 @@ describe('Mutation', () => {
         ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(
+      expect(requestCall.options.body).toEqual(
         expect.objectContaining({ cover: file }),
       );
-      expect(requestCall[1].body).toEqual(
+      expect(requestCall.options.body).toEqual(
         expect.objectContaining({ attachments: mockFileList }),
       );
     });
@@ -3771,7 +3851,7 @@ describe('Mutation', () => {
           createPost(input: $input)
             @rest(
               type: "Post"
-              method: "POST"
+              method: "post"
               path: "/posts/createPost"
               bodySerializer: "missing"
             ) {
@@ -3811,7 +3891,9 @@ describe('validateRequestMethodForOperationType', () => {
           'GIBBERISH',
           OperationTypeNode.MUTATION,
         ),
-      ).toThrowError('"mutation" operations do not support that HTTP-verb');
+      ).toThrowErrorMatchingInlineSnapshot(
+        `""mutation" operations do not support that HTTP-verb"`,
+      );
     });
   });
   describe('for operation type "subscription"', () => {
@@ -3822,14 +3904,16 @@ describe('validateRequestMethodForOperationType', () => {
           'GET',
           OperationTypeNode.SUBSCRIPTION,
         ),
-      ).toThrowError('A "subscription" operation is not supported yet.');
+      ).toThrowErrorMatchingInlineSnapshot(
+        `"A "subscription" operation is not supported yet."`,
+      );
     });
   });
 });
 
 describe('export directive', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
   it('should throw an error if export is missing', async () => {
     expect.assertions(1);
@@ -4085,7 +4169,7 @@ describe('export directive', () => {
 
 describe('Apollo client integration', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('can integrate with apollo client', async () => {
@@ -4143,7 +4227,7 @@ describe('Apollo client integration', () => {
       query: postTagExport,
     });
 
-    expect(fetchMock.lastCall()[1].body).toBeUndefined();
+    expect(fetchMock.callHistory.lastCall()!.options.body).toBeUndefined();
   });
 
   it('treats absent response fields as optional', async () => {
@@ -4259,7 +4343,7 @@ describe('Apollo client integration', () => {
       link: combinedLink,
     });
 
-    fetchMock.mock('/api/post/1', {
+    fetchMock.mockGlobal().get('/api/post/1', {
       status,
       body: { id: 1 },
     });
@@ -4314,7 +4398,7 @@ describe('Apollo client integration', () => {
 
 describe('Playing nice with others', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   function buildLinks() {

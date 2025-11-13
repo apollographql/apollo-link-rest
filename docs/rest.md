@@ -404,8 +404,7 @@ Here is one way you might customize `RestLink`:
 
 ```js
   import fetch from 'node-fetch';
-  import * as camelCase from 'camelcase';
-  import * as snake_case from 'snake-case';
+  import { camelCase, snakeCase } from 'change-case';
 
   const link = new RestLink({
     endpoints: { github: 'github.com' },
@@ -416,7 +415,7 @@ Here is one way you might customize `RestLink`:
     },
     credentials: "same-origin",
     fieldNameNormalizer: (key: string) => camelCase(key),
-    fieldNameDenormalizer: (key: string) => snake_case(key),
+    fieldNameDenormalizer: (key: string) => snakeCase(key),
     typePatcher: {
       Post: ()=> {
         bodySnippet...

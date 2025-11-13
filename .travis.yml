@@ -11,10 +11,10 @@ script:
   # run coverage and file size checks
   - npm run coverage:upload || true #ignore failures
 
-    # make sure files don't get too large
+  # make sure files don't get too large (bundlesize disabled, because it wouldn't install - see https://github.com/siddharthkp/bundlesize/pull/370)
   - npm run filesize
 
-    # make sure there are no type errors
+  # make sure there are no type errors
   - npm run check-types
 
 # Allow Travis tests to run in containers.
