@@ -1,6 +1,6 @@
 {
   "name": "apollo-link-rest",
-  "version": "0.9.0",
+  "version": "0.10.0-rc.1",
   "description": "Query existing REST services with GraphQL",
   "license": "MIT",
   "main": "./lib/bundle.umd.js",
@@ -92,16 +92,13 @@
   ],
   "lint-staged": {
     "*.ts*": [
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ],
     "*.js*": [
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ],
     "*.json*": [
-      "prettier --write",
-      "git add"
+      "prettier --write"
     ]
   },
   "pre-commit": "lint-staged",
