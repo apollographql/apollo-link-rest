@@ -1,35 +1,29 @@
 import {
-  OperationTypeNode,
-  OperationDefinitionNode,
-  FragmentDefinitionNode,
-  // Query Nodes
   DirectiveNode,
   DocumentNode,
   FieldNode,
+  FragmentDefinitionNode,
+  OperationDefinitionNode,
+  OperationTypeNode,
   SelectionSetNode,
 } from 'graphql';
+import { Observable } from '@apollo/client/core';
+import { ApolloLink } from '@apollo/client';
 import {
-  ApolloLink,
-  Observable,
-  Operation,
-  NextLink,
-  FetchResult,
-} from '@apollo/client/core';
-import {
-  hasDirectives,
-  getMainDefinition,
-  getFragmentDefinitions,
-  createFragmentMap,
-  addTypenameToDocument,
-  FragmentMap,
-  isField,
-  isInlineFragment,
-  resultKeyNameFromField,
   checkDocument,
+  createFragmentMap,
+  FragmentMap,
+  getFragmentDefinitions,
+  getMainDefinition,
+  hasDirectives,
+  isField,
   removeDirectivesFromDocument,
-} from '@apollo/client/utilities';
-import { graphql } from './utils/graphql';
+  resultKeyNameFromField,
+} from '@apollo/client/utilities/internal';
+import { graphql, isInlineFragment } from './utils/graphql';
 import * as qs from 'qs';
+import { addTypenameToDocument } from '@apollo/client/utilities';
+import { mergeMap, of } from 'rxjs';
 
 export type DirectiveInfo = {
   [fieldName: string]: { [argName: string]: any };
@@ -709,7 +703,7 @@ export const normalizeHeaders = (
   if (headers instanceof Headers) {
     return headers;
   } else {
-    return new Headers(headers || {});
+    return new Headers((headers as [string, string][]) || {});
   }
 };
 
@@ -774,19 +768,19 @@ export const validateRequestMethodForOperationType = (
   operationType: OperationTypeNode,
 ): void => {
   switch (operationType) {
-    case 'query':
+    case OperationTypeNode.QUERY:
       if (SUPPORTED_HTTP_VERBS.indexOf(method.toUpperCase()) !== -1) {
         return;
       }
       throw new Error(
         `A "query" operation can only support "GET" requests but got "${method}".`,
       );
-    case 'mutation':
+    case OperationTypeNode.MUTATION:
       if (SUPPORTED_HTTP_VERBS.indexOf(method.toUpperCase()) !== -1) {
         return;
       }
       throw new Error('"mutation" operations do not support that HTTP-verb');
-    case 'subscription':
+    case OperationTypeNode.SUBSCRIPTION:
       throw new Error('A "subscription" operation is not supported yet.');
     default:
       const _exhaustiveCheck: never = operationType;
@@ -1063,10 +1057,13 @@ const resolver: Resolver = async (
     }
 
     body = serializedBody.body;
-    overrideHeaders = new Headers(serializedBody.headers);
+    overrideHeaders = new Headers(serializedBody.headers as [string, string][]);
   }
 
-  validateRequestMethodForOperationType(method, operationType || 'query');
+  validateRequestMethodForOperationType(
+    method,
+    operationType || OperationTypeNode.QUERY,
+  );
 
   const requestParams = {
     method,
@@ -1311,9 +1308,9 @@ export class RestLink extends ApolloLink {
   }
 
   public request(
-    operation: Operation,
-    forward?: NextLink,
-  ): Observable<FetchResult> | null {
+    operation: ApolloLink.Operation,
+    forward?: ApolloLink.ForwardFunction,
+  ): Observable<ApolloLink.Result> {
     const { query, variables, getContext, setContext } = operation;
     const context: LinkChainContext | any = getContext() as any;
     const isRestQuery = hasDirectives(['rest'], query);
@@ -1375,40 +1372,42 @@ export class RestLink extends ApolloLink {
       responseTransformer: this.responseTransformer,
     };
     const resolverOptions = {};
-    let obs;
+    let obs: Observable<ApolloLink.Result>;
     if (nonRest && forward) {
       operation.query = nonRest;
       obs = forward(operation);
-    } else obs = Observable.of({ data: {} });
+    } else obs = of({ data: {} });
 
-    return obs.flatMap(
-      ({ data, errors }) =>
-        new Observable(observer => {
-          graphql(
-            resolver,
-            queryWithTypename,
-            data,
-            requestContext,
-            variables,
-            resolverOptions,
-          )
-            .then(data => {
-              setContext({
-                restResponses: (context.restResponses || []).concat(
-                  requestContext.responses,
-                ),
+    return obs.pipe(
+      mergeMap(
+        ({ data, errors }) =>
+          new Observable(observer => {
+            graphql(
+              resolver,
+              queryWithTypename,
+              data,
+              requestContext,
+              variables,
+              resolverOptions,
+            )
+              .then(data => {
+                setContext({
+                  restResponses: (context.restResponses || []).concat(
+                    requestContext.responses,
+                  ),
+                });
+                observer.next({ data, errors });
+                observer.complete();
+              })
+              .catch(err => {
+                if (err.name === 'AbortError') return;
+                if (err.result && err.result.errors) {
+                  observer.next(err.result);
+                }
+                observer.error(err);
               });
-              observer.next({ data, errors });
-              observer.complete();
-            })
-            .catch(err => {
-              if (err.name === 'AbortError') return;
-              if (err.result && err.result.errors) {
-                observer.next(err.result);
-              }
-              observer.error(err);
-            });
-        }),
+          }),
+      ),
     );
   }
 }
