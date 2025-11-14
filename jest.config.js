@@ -1,23 +1,36 @@
-module.exports = {
+export default {
   roots: ['<rootDir>/src'],
-  globals: {
-    'ts-jest': {
-      babelConfig: false,
-      mapCoverage: true,
-      compilerOptions: {
-        allowJs: true, // Necessary for jest.js
-      },
-      diagnostics: {
-        ignoreCodes: [
-          151001 // Suppress esModuleInterop suggestion that breaks __tests__/restLink.ts
-        ]
-      }
-    },
-  },
+  preset: 'ts-jest/presets/default-esm',
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
   transform: {
-    '.(ts|tsx)': 'ts-jest',
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+        tsconfig: {
+          allowJs: true,
+          esModuleInterop: true,
+        },
+        diagnostics: {
+          ignoreCodes: [
+            151001, // Suppress esModuleInterop suggestion that breaks __tests__/restLink.ts
+          ],
+        },
+      },
+    ],
+    '^.+\\.jsx?$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
   },
+  transformIgnorePatterns: ['node_modules/(?!(change-case|@fetch-mock)/)'],
   testRegex: '(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
-  setupFiles: ['./scripts/jest.js'],
+  setupFiles: ['./scripts/jest-setup.cjs'],
+  testEnvironment: 'jsdom',
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };

@@ -8,25 +8,25 @@
 */
 
 import {
+  DirectiveNode,
   DocumentNode,
-  SelectionSetNode,
   FieldNode,
   FragmentDefinitionNode,
   InlineFragmentNode,
-  DirectiveNode,
+  SelectionNode,
+  SelectionSetNode,
 } from 'graphql';
 
 import {
-  getMainDefinition,
-  getFragmentDefinitions,
-  createFragmentMap,
-  shouldInclude,
-  isField,
-  isInlineFragment,
-  resultKeyNameFromField,
   argumentsObjectFromField,
+  createFragmentMap,
   FragmentMap,
-} from '@apollo/client/utilities';
+  getFragmentDefinitions,
+  getMainDefinition,
+  isField,
+  resultKeyNameFromField,
+  shouldInclude,
+} from '@apollo/client/utilities/internal';
 
 import { DirectiveInfo, ExecInfo, Resolver } from '../restLink';
 
@@ -261,4 +261,10 @@ function executeSubSelectedArray(field, result, execContext) {
       return executeSelectionSet(field.selectionSet, item, execContext);
     }),
   );
+}
+
+export function isInlineFragment(
+  selection: SelectionNode,
+): selection is InlineFragmentNode {
+  return selection.kind === 'InlineFragment';
 }

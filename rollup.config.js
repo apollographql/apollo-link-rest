@@ -1,5 +1,5 @@
-import resolve from 'rollup-plugin-local-resolve';
-import sourcemaps from 'rollup-plugin-sourcemaps';
+import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
 
 const globals = {
   '@apollo/client/core': 'apolloClient.core',
@@ -20,7 +20,7 @@ export default {
   },
   external: Object.keys(globals),
   onwarn,
-  plugins: [resolve(), sourcemaps()],
+  plugins: [resolve(), commonjs()],
 };
 
 function onwarn(message) {

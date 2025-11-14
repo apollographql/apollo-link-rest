@@ -1,39 +1,78 @@
 import {
   ApolloClient,
-  InMemoryCache,
   ApolloLink,
-  HttpLink,
-  execute,
-  from,
-  toPromise,
-  gql,
   disableFragmentWarnings,
-  ApolloQueryResult,
+  execute,
+  gql,
+  HttpLink,
+  InMemoryCache,
+  ServerError,
 } from '@apollo/client/core';
-import { onError } from '@apollo/link-error';
+import fetchMock from '@fetch-mock/jest';
+import {
+  camelCase as camelCaseOfficial,
+  snakeCase as snake_case_official,
+} from 'change-case';
+import {
+  normalizeHeaders,
+  RestLink,
+  validateRequestMethodForOperationType,
+} from '../restLink';
+import { firstValueFrom, map } from 'rxjs';
+import { OperationTypeNode } from 'graphql/language';
+import { ErrorLink } from '@apollo/client/link/error';
+
+// the official apis have an extra argument that would conflict (via typescript)
+function camelCase(str: string): string {
+  return camelCaseOfficial(str);
+}
+function snake_case(str: string): string {
+  return snake_case_official(str);
+}
 
 disableFragmentWarnings();
 
-import * as camelCase from 'camelcase';
-const snake_case = require('snake-case');
-import * as fetchMock from 'fetch-mock';
+// Configure fetchMock with the original fetch before mocking
+// This ensures unmockGlobal() can restore it properly
+if (!fetchMock.config.fetch && typeof fetch !== 'undefined') {
+  fetchMock.config.fetch = fetch;
+}
 
-import {
-  RestLink,
-  validateRequestMethodForOperationType,
-  normalizeHeaders,
-} from '../restLink';
+// Use fetchMock's fetchHandler as the mocked fetch
+// This is more reliable than mockGlobal() in ESM environment
+if (typeof (globalThis as any).__setMockFetch === 'function') {
+  (globalThis as any).__setMockFetch(fetchMock.fetchHandler.bind(fetchMock));
+} else {
+  // Fallback to mockGlobal if __setMockFetch isn't available
+  fetchMock.mockGlobal();
+}
 
 /** Helper for extracting a simple object of headers from the HTTP-fetch Headers class */
 function flattenHeaders({
   headers,
 }: {
-  headers: Headers;
+  headers?:
+    | Headers
+    | Record<string, string>
+    | Array<[string, string]>
+    | undefined;
 }): { [key: string]: string } {
   const headersFlattened: { [key: string]: string } = {};
-  headers.forEach((value, key) => {
-    headersFlattened[key] = value;
-  });
+  if (Array.isArray(headers)) {
+    headers.forEach(([key, value]) => {
+      headersFlattened[key] = value;
+    });
+  } else {
+    if (headers instanceof Headers) {
+      headers.forEach((value, key) => {
+        headersFlattened[key] = value;
+      });
+    } else {
+      Object.entries(headers || {}).forEach(([key, value]) => {
+        headersFlattened[key] = value;
+      });
+    }
+  }
   return headersFlattened;
 }
 
@@ -41,12 +80,28 @@ function flattenHeaders({
 function orderDupPreservingFlattenedHeaders({
   headers,
 }: {
-  headers: Headers;
+  headers?:
+    | Headers
+    | Record<string, string>
+    | Array<[string, string]>
+    | undefined;
 }): string[] {
   const orderedFlattened: string[] = [];
-  headers.forEach((value, key) => {
-    orderedFlattened.push(`${key}: ${value}`);
-  });
+  if (Array.isArray(headers)) {
+    headers.forEach(([key, value]) => {
+      orderedFlattened.push(`${key}: ${value}`);
+    });
+  } else {
+    if (headers instanceof Headers) {
+      headers.forEach((value, key) => {
+        orderedFlattened.push(`${key}: ${value}`);
+      });
+    } else {
+      Object.entries(headers || {}).forEach(([key, value]) => {
+        orderedFlattened.push(`${key}: ${value}`);
+      });
+    }
+  }
   return orderedFlattened;
 }
 
@@ -60,10 +115,15 @@ const sampleQuery = gql`
 
 type Result = { [index: string]: any };
 
-describe('Configuration', async () => {
-  describe('Errors', async () => {
+const dummyClient = new ApolloClient({
+  link: ApolloLink.empty(),
+  cache: new InMemoryCache(),
+});
+
+describe('Configuration', () => {
+  describe('Errors', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
 
     it('throws without any config', () => {
@@ -104,11 +164,14 @@ describe('Configuration', async () => {
       `;
 
       try {
-        await toPromise<Result>(
-          execute(link, {
-            operationName: 'postTitle',
-            query: postTitleQuery,
-          }),
+        await firstValueFrom<Result>(
+          execute(
+            link,
+            {
+              query: postTitleQuery,
+            },
+            { client: dummyClient },
+          ),
         );
       } catch (error) {
         expect(error.message).toBe(
@@ -166,9 +229,9 @@ describe('Configuration', async () => {
     });
   });
 
-  describe('Field name normalizer', async () => {
+  describe('Field name normalizer', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('should apply fieldNameNormalizer if specified', async () => {
       expect.assertions(3);
@@ -200,11 +263,14 @@ describe('Configuration', async () => {
         }
       `;
 
-      const { data } = await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postAndTags,
-        }),
+      const { data } = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postAndTags,
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(data.post.title).toBeDefined();
@@ -236,11 +302,14 @@ describe('Configuration', async () => {
         }
       `;
 
-      const { data } = await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postAndTags,
-        }),
+      const { data } = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postAndTags,
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(data.post.__typename).toBeDefined();
@@ -270,11 +339,14 @@ describe('Configuration', async () => {
         }
       `;
 
-      const { data } = await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postAndTags,
-        }),
+      const { data } = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postAndTags,
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(data.post.data).toBeDefined();
@@ -314,14 +386,17 @@ describe('Configuration', async () => {
         }
       `;
 
-      const { data } = await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postQuery,
-          variables: {
-            perRequestNormalizer: snake_case,
+      const { data } = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postQuery,
+            variables: {
+              perRequestNormalizer: snake_case,
+            },
           },
-        }),
+          { client: dummyClient },
+        ),
       );
 
       expect(data.post).toEqual({
@@ -335,7 +410,7 @@ describe('Configuration', async () => {
 
   describe('Custom fetch', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('should apply customFetch if specified', async () => {
       expect.assertions(1);
@@ -357,11 +432,14 @@ describe('Configuration', async () => {
         }
       `;
 
-      const { data } = await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitle,
-        }),
+      const { data } = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitle,
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(data.post.title).toBe('custom');
@@ -591,11 +669,14 @@ describe('Complex responses need nested __typename insertions', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'someOperation',
-        query: someQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: someQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({
@@ -686,11 +767,14 @@ describe('Complex responses need nested __typename insertions', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'someOperation',
-        query: someQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: someQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({
@@ -924,11 +1008,14 @@ describe('Complex responses need nested __typename insertions', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'someOperation',
-        query: someQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: someQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({
@@ -939,7 +1026,7 @@ describe('Complex responses need nested __typename insertions', () => {
 
 describe('Can customize/parse the response before passing to Apollo', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   const posts = [
@@ -970,8 +1057,8 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           }
         }
       `;
-      const { data: restData } = await toPromise<Result>(
-        execute(link, { operationName: 'restQuery', query: restQuery }),
+      const { data: restData } = await firstValueFrom<Result>(
+        execute(link, { query: restQuery }, { client: dummyClient }),
       );
       expect(restData).toEqual({
         post: {
@@ -1003,8 +1090,8 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           }
         }
       `;
-      const { data: restData } = await toPromise<Result>(
-        execute(link, { operationName: 'restQuery', query: restQuery }),
+      const { data: restData } = await firstValueFrom<Result>(
+        execute(link, { query: restQuery }, { client: dummyClient }),
       );
       expect(restData).toEqual({
         posts: [
@@ -1016,7 +1103,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
   });
 
   describe('with endpoint level `responseTransformer`', () => {
-    it('handles single record responses', async done => {
+    it('handles single record responses', async () => {
       fetchMock.get('/api/v1/posts/1', {
         meta: {},
         post: posts[1],
@@ -1024,8 +1111,9 @@ describe('Can customize/parse the response before passing to Apollo', () => {
 
       const link = new RestLink({
         // This is purpsefully wrong so that we verify the endpoint one is called
-        responseTransformer: () =>
-          done.fail('Should have called endpoint.responseTransformer'),
+        responseTransformer: () => {
+          throw new Error('Should have called endpoint.responseTransformer');
+        },
         endpoints: {
           v1: {
             uri: '/api/v1',
@@ -1045,8 +1133,8 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           }
         }
       `;
-      const { data: restData } = await toPromise<Result>(
-        execute(link, { operationName: 'restQuery', query: restQuery }),
+      const { data: restData } = await firstValueFrom<Result>(
+        execute(link, { query: restQuery }, { client: dummyClient }),
       );
       expect(restData).toEqual({
         post: {
@@ -1055,18 +1143,18 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           __typename: 'Post',
         },
       });
-      done();
     });
 
-    it('handles multiple record responses', async done => {
+    it('handles multiple record responses', async () => {
       fetchMock.get('/api/v1/posts', {
         meta: {},
         posts,
       });
 
       const link = new RestLink({
-        responseTransformer: () =>
-          done.fail('Should have called endpoint.responseTransformer'),
+        responseTransformer: () => {
+          throw new Error('Should have called endpoint.responseTransformer');
+        },
         endpoints: {
           v1: {
             uri: '/api/v1',
@@ -1085,8 +1173,8 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           }
         }
       `;
-      const { data: restData } = await toPromise<Result>(
-        execute(link, { operationName: 'restQuery', query: restQuery }),
+      const { data: restData } = await firstValueFrom<Result>(
+        execute(link, { query: restQuery }, { client: dummyClient }),
       );
       expect(restData).toEqual({
         posts: [
@@ -1094,14 +1182,13 @@ describe('Can customize/parse the response before passing to Apollo', () => {
           { title: 'Respect apollo', __typename: 'Post' },
         ],
       });
-      done();
     });
   });
 });
 
 describe('Query single call', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('can run a simple query', async () => {
@@ -1120,11 +1207,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
@@ -1142,11 +1232,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'serverConfig',
-        query: serverConfigQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: serverConfigQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({ config: stringResp });
@@ -1164,11 +1257,14 @@ describe('Query single call', () => {
         admins @rest(type: "[String!]!", path: "/admins")
       }
     `;
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'adminIds',
-        query: adminsQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: adminsQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({ admins: arrayResp });
@@ -1190,11 +1286,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({ post });
@@ -1230,11 +1329,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'tags',
-        query: tagsQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: tagsQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     const tagsWithTypeName = tags.map(tag => ({
@@ -1271,11 +1373,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postWithContent',
-        query: postTitleQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.content).toBeUndefined();
@@ -1297,11 +1402,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
@@ -1324,12 +1432,15 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-        variables: { id: '1' },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.title).toBe(post.title);
@@ -1353,12 +1464,15 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'feed',
-        query: feedQuery,
-        variables: { offset: 0 },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: feedQuery,
+          variables: { offset: 0 },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.title).toBe(post.title);
@@ -1382,12 +1496,15 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'feed',
-        query: feedQuery,
-        variables: { published: false },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: feedQuery,
+          variables: { published: false },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.title).toBe(post.title);
@@ -1410,12 +1527,15 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'feed',
-        query: peopleWithoutAddressQuery,
-        variables: { address: null },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: peopleWithoutAddressQuery,
+          variables: { address: null },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.people.name).toBe(person.name);
@@ -1448,19 +1568,25 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data: data1 } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle1',
-        query: postTitleQuery1,
-        variables: { id: '1' },
-      }),
+    const { data: data1 } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery1,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
-    const { data: data2 } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle2',
-        query: postTitleQuery2,
-        variables: { id: '1' },
-      }),
+    const { data: data2 } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery2,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data1.post.title).toBe(postV1.title);
@@ -1501,11 +1627,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({
@@ -1532,11 +1661,14 @@ describe('Query single call', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'noContent',
-        query: queryWithNoContent,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: queryWithNoContent,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data).toMatchObject({
@@ -1567,11 +1699,14 @@ describe('Query single call', () => {
     `;
 
     try {
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'noContent',
-          query: errorWithNoContent,
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: errorWithNoContent,
+          },
+          { client: dummyClient },
+        ),
       );
     } catch (e) {
       expect(e).toEqual(
@@ -1583,7 +1718,7 @@ describe('Query single call', () => {
 
 describe('Use a custom pathBuilder', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
   it('in a basic way', async () => {
     expect.assertions(4);
@@ -1632,15 +1767,18 @@ describe('Use a custom pathBuilder', () => {
       return '/posts' + qs;
     }
 
-    const { data: data1 } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-        variables: {
-          status: 'published',
-          pathFunction: createPostsPath,
+    const { data: data1 } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+          variables: {
+            status: 'published',
+            pathFunction: createPostsPath,
+          },
         },
-      }),
+        { client: dummyClient },
+      ),
     );
 
     expect(data1).toMatchObject({
@@ -1648,15 +1786,18 @@ describe('Use a custom pathBuilder', () => {
     });
 
     // Extra tests below to disprove: https://github.com/apollographql/apollo-link-rest/issues/102
-    const { data: data2 } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQuery,
-        variables: {
-          otherStatus: 'published',
-          pathFunction: createPostsPath,
+    const { data: data2 } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+          variables: {
+            otherStatus: 'published',
+            pathFunction: createPostsPath,
+          },
         },
-      }),
+        { client: dummyClient },
+      ),
     );
 
     expect(data2).toMatchObject({
@@ -1668,7 +1809,7 @@ describe('Use a custom pathBuilder', () => {
       link,
     });
 
-    const { data: data1b }: ApolloQueryResult<any> = await client.query({
+    const { data: data1b }: ApolloLink.Result<any> = await client.query({
       query: postTitleQuery,
       variables: {
         status: 'published',
@@ -1679,7 +1820,7 @@ describe('Use a custom pathBuilder', () => {
       posts: [{ ...posts1[0], __typename: 'Post' }],
     });
 
-    const { data: data2b }: ApolloQueryResult<any> = await client.query({
+    const { data: data2b }: ApolloLink.Result<any> = await client.query({
       query: postTitleQuery,
       variables: {
         otherStatus: 'published',
@@ -1733,35 +1874,54 @@ describe('Use a custom pathBuilder', () => {
       }
     `;
 
-    await toPromise<Result>(
-      execute(link, {
-        operationName: 'postQuery',
-        query: nonEncodedQuery,
-        variables: { name: 'Love apollo' },
-      }),
+    await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: nonEncodedQuery,
+          variables: { name: 'Love apollo' },
+        },
+        { client: dummyClient },
+      ),
     );
 
-    expect(fetchMock.called('/api/posts?name=Love apollo')).toBe(true);
+    expect(
+      fetchMock.callHistory.called(
+        'http://localhost/api/posts?name=Love apollo',
+      ),
+    ).toBe(true);
 
-    await toPromise<Result>(
-      execute(link, {
-        operationName: 'postQuery',
-        query: encodedQuery,
-        variables: { name: 'Love apollo' },
-      }),
+    await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: encodedQuery,
+          variables: { name: 'Love apollo' },
+        },
+        { client: dummyClient },
+      ),
     );
 
-    expect(fetchMock.called('/api/posts?name=Love%20apollo')).toBe(true);
+    expect(
+      fetchMock.callHistory.called(
+        'http://localhost/api/posts?name=Love%20apollo',
+      ),
+    ).toBe(true);
 
-    await toPromise<Result>(
-      execute(link, {
-        operationName: 'postQuery',
-        query: mixedQuery,
-        variables: { id: 1, query: { comments: 5 } },
-      }),
+    await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: mixedQuery,
+          variables: { id: 1, query: { comments: 5 } },
+        },
+        { client: dummyClient },
+      ),
     );
 
-    expect(fetchMock.called('/api/posts/1?comments=5')).toBe(true);
+    expect(
+      fetchMock.callHistory.called('http://localhost/api/posts/1?comments=5'),
+    ).toBe(true);
   });
   // TODO: Test for Path using context
   // TODO: Test for PathBuilder using replacer
@@ -1770,7 +1930,7 @@ describe('Use a custom pathBuilder', () => {
 
 describe('Query multiple calls', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('can run a query with multiple rest calls', async () => {
@@ -1796,11 +1956,14 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postAndTags',
-        query: postAndTags,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postAndTags,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post).toBeDefined();
@@ -1831,11 +1994,14 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postAndTags',
-        query: postAndTags,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postAndTags,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post).toBeDefined();
@@ -1867,11 +2033,14 @@ describe('Query multiple calls', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postAndTags',
-        query: postAndTags,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postAndTags,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.tags).toBeDefined();
@@ -1879,9 +2048,9 @@ describe('Query multiple calls', () => {
   });
 });
 
-describe('GraphQL aliases should work', async () => {
+describe('GraphQL aliases should work', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('outer-level aliases are supported', async () => {
@@ -1909,12 +2078,15 @@ describe('GraphQL aliases should work', async () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQueries,
-        variables: { id: '1' },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQueries,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.v1.title).toBe(postV1.title);
@@ -1938,12 +2110,15 @@ describe('GraphQL aliases should work', async () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTitleQueries,
-        variables: { id: '1' },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQueries,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.title).toBe(postV1.titleText);
@@ -1952,7 +2127,7 @@ describe('GraphQL aliases should work', async () => {
 
 describe('Query options', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
   describe('credentials', () => {
     it('adds credentials to the request from the setup', async () => {
@@ -1968,14 +2143,17 @@ describe('Query options', () => {
       const post = { id: '1', Title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'post',
-          query: sampleQuery,
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: sampleQuery,
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const credentials = fetchMock.lastCall()[1].credentials;
+      const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
     });
 
@@ -1986,11 +2164,13 @@ describe('Query options', () => {
         operation.setContext({
           credentials: 'my-credentials',
         });
-        return forward(operation).map(result => {
-          const { credentials } = operation.getContext();
-          expect(credentials).toBeDefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { credentials } = operation.getContext();
+            expect(credentials).toBeDefined();
+            return result;
+          }),
+        );
       });
 
       const link = ApolloLink.from([
@@ -2001,14 +2181,17 @@ describe('Query options', () => {
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'post',
-          query: sampleQuery,
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: sampleQuery,
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const credentials = fetchMock.lastCall()[1].credentials;
+      const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
     });
 
@@ -2019,11 +2202,13 @@ describe('Query options', () => {
         operation.setContext({
           credentials: 'my-credentials',
         });
-        return forward(operation).map(result => {
-          const { credentials } = operation.getContext();
-          expect(credentials).toBeDefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { credentials } = operation.getContext();
+            expect(credentials).toBeDefined();
+            return result;
+          }),
+        );
       });
 
       const link = ApolloLink.from([
@@ -2037,14 +2222,17 @@ describe('Query options', () => {
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'post',
-          query: sampleQuery,
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: sampleQuery,
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const credentials = fetchMock.lastCall()[1].credentials;
+      const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
     });
 
@@ -2052,15 +2240,17 @@ describe('Query options', () => {
       expect.assertions(5);
 
       const credentialsMiddleware = new ApolloLink((operation, forward) => {
-        return forward(operation).map(result => {
-          const { restResponses } = operation.getContext();
-          expect(restResponses).toHaveLength(2);
-          expect(restResponses[0].url).toBe('/api/post/1');
-          expect(restResponses[0].headers.get('Header1')).toBe('Header1');
-          expect(restResponses[1].url).toBe('/api/tags');
-          expect(restResponses[1].headers.get('Header2')).toBe('Header2');
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { restResponses } = operation.getContext();
+            expect(restResponses).toHaveLength(2);
+            expect(restResponses[0].url).toBe('http://localhost/api/post/1');
+            expect(restResponses[0].headers.get('Header1')).toBe('Header1');
+            expect(restResponses[1].url).toBe('http://localhost/api/tags');
+            expect(restResponses[1].headers.get('Header2')).toBe('Header2');
+            return result;
+          }),
+        );
       });
 
       const link = ApolloLink.from([
@@ -2094,12 +2284,15 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postAndTags',
-          query: postAndTags,
-          context,
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postAndTags,
+            context,
+          },
+          { client: dummyClient },
+        ),
       );
     });
   });
@@ -2121,17 +2314,22 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'GET' }),
+      const requestCall = fetchMock.callHistory.calls(
+        'http://localhost/api/post/1',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'get' }),
       );
     });
 
@@ -2152,17 +2350,20 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'GET' }),
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'get' }),
       );
     });
   });
@@ -2185,7 +2386,9 @@ describe('Query options', () => {
       };
 
       const link1 = new RestLink({ uri: '/api' });
-      await toPromise<Result>(execute(link1, operation));
+      await firstValueFrom<Result>(
+        execute(link1, operation, { client: dummyClient }),
+      );
 
       const link2 = new RestLink({
         uri: '/api',
@@ -2193,15 +2396,17 @@ describe('Query options', () => {
           Accept: 'text/plain',
         },
       });
-      await toPromise<Result>(execute(link2, operation));
+      await firstValueFrom<Result>(
+        execute(link2, operation, { client: dummyClient }),
+      );
 
-      const requestCalls = fetchMock.calls('/api/posts');
-      expect(orderDupPreservingFlattenedHeaders(requestCalls[0][1])).toEqual([
-        'accept: application/json',
-      ]);
-      expect(orderDupPreservingFlattenedHeaders(requestCalls[1][1])).toEqual([
-        'accept: text/plain',
-      ]);
+      const requestCalls = fetchMock.callHistory.calls('/api/posts');
+      expect(
+        orderDupPreservingFlattenedHeaders(requestCalls[0].options),
+      ).toEqual(['accept: application/json']);
+      expect(
+        orderDupPreservingFlattenedHeaders(requestCalls[1].options),
+      ).toEqual(['accept: text/plain']);
     });
     it('adds headers to the request from the context', async () => {
       expect.assertions(2);
@@ -2210,11 +2415,13 @@ describe('Query options', () => {
         operation.setContext({
           headers: { authorization: '1234' },
         });
-        return forward(operation).map(result => {
-          const { headers } = operation.getContext();
-          expect(headers).toBeDefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { headers } = operation.getContext();
+            expect(headers).toBeDefined();
+            return result;
+          }),
+        );
       });
       const link = ApolloLink.from([
         headersMiddleware,
@@ -2233,16 +2440,19 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall.options)).toEqual([
         'accept: application/json',
         'authorization: 1234',
       ]);
@@ -2265,16 +2475,19 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall.options) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             authorization: '1234',
@@ -2295,11 +2508,13 @@ describe('Query options', () => {
           },
           headersToOverride: ['authorization'],
         });
-        return forward(operation).map(result => {
-          const { headers } = operation.getContext();
-          expect(headers).toBeDefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { headers } = operation.getContext();
+            expect(headers).toBeDefined();
+            return result;
+          }),
+        );
       });
       const link = ApolloLink.from([
         headersMiddleware,
@@ -2321,16 +2536,19 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall.options)).toEqual([
         'accept: application/json',
         'authorization: 1234',
         'context: context',
@@ -2358,11 +2576,13 @@ describe('Query options', () => {
           headers: { authorization: 'context', context: 'context' },
           headersMergePolicy,
         });
-        return forward(operation).map(result => {
-          const { headers } = operation.getContext();
-          expect(headers).toBeDefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { headers } = operation.getContext();
+            expect(headers).toBeDefined();
+            return result;
+          }),
+        );
       });
       const link = ApolloLink.from([
         headersMiddleware,
@@ -2384,16 +2604,19 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect({ headers: flattenHeaders(requestCall.options) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             authorization: 'initial setup',
@@ -2410,11 +2633,13 @@ describe('Query options', () => {
         operation.setContext({
           headers: { authorization: 'context' },
         });
-        return forward(operation).map(result => {
-          const { headers } = operation.getContext();
-          expect(headers).toBeDefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { headers } = operation.getContext();
+            expect(headers).toBeDefined();
+            return result;
+          }),
+        );
       });
       const link = ApolloLink.from([
         headersMiddleware,
@@ -2436,35 +2661,35 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      const { headers } = requestCall[1];
-      const orderedFlattened = [];
-      headers.forEach((value, key) => {
-        orderedFlattened.push(`${key}: ${value}`);
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(flattenHeaders(requestCall.options)).toEqual({
+        accept: 'application/json',
+        authorization: 'initial setup, context',
       });
-      expect(orderedFlattened).toEqual([
-        'accept: application/json',
-        'authorization: initial setup, context',
-      ]);
     });
     it('generates a new headers object if headers are undefined', async () => {
       const headersMiddleware = new ApolloLink((operation, forward) => {
         operation.setContext({
           headers: undefined,
         });
-        return forward(operation).map(result => {
-          const { headers } = operation.getContext();
-          expect(headers).toBeUndefined();
-          return result;
-        });
+        return forward(operation).pipe(
+          map(result => {
+            const { headers } = operation.getContext();
+            expect(headers).toBeUndefined();
+            return result;
+          }),
+        );
       });
       const link = ApolloLink.from([
         headersMiddleware,
@@ -2483,16 +2708,19 @@ describe('Query options', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTitleQuery,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTitleQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/post/1')[0];
-      expect(orderDupPreservingFlattenedHeaders(requestCall[1])).toEqual([
+      const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
+      expect(orderDupPreservingFlattenedHeaders(requestCall.options)).toEqual([
         'accept: application/json',
       ]);
     });
@@ -2502,7 +2730,7 @@ describe('Query options', () => {
 describe('Mutation', () => {
   describe('basic support', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('supports POST requests', async () => {
       expect.assertions(2);
@@ -2521,24 +2749,27 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            @rest(type: "Post", path: "/posts/new", method: "post") {
             id
             title
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: { title: post.title } },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: { title: post.title } },
+          },
+          { client: dummyClient },
+        ),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
     });
     it('supports PUT requests', async () => {
@@ -2565,18 +2796,21 @@ describe('Mutation', () => {
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'republish',
-          query: replacePostMutation,
-          variables: { id: post.id, input: post },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: replacePostMutation,
+            variables: { id: post.id, input: post },
+          },
+          { client: dummyClient },
+        ),
       );
       expect(response.data.replacedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'PUT' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'put' }),
       );
     });
     it('supports PATCH requests', async () => {
@@ -2605,18 +2839,21 @@ describe('Mutation', () => {
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'editPost',
-          query: editPostMutation,
-          variables: { id: post.id, input: { categoryId: post.categoryId } },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: editPostMutation,
+            variables: { id: post.id, input: { categoryId: post.categoryId } },
+          },
+          { client: dummyClient },
+        ),
       );
       expect(response.data.editedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'PATCH' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'patch' }),
       );
     });
     it('supports DELETE requests', async () => {
@@ -2636,24 +2873,27 @@ describe('Mutation', () => {
           }
         }
       `;
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'deletePost',
-          query: replacePostMutation,
-          variables: { id: post.id },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: replacePostMutation,
+            variables: { id: post.id },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/1')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'DELETE' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'delete' }),
       );
     });
   });
 
   describe('empty response bodies', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
 
     it('returns an empty object on 204 status', async () => {
@@ -2676,18 +2916,21 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts", method: "POST") {
+            @rest(type: "Post", path: "/posts", method: "post") {
             id
             title
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: { title: post.title } },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: { title: post.title } },
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(response.data.publishedPost).toEqual({
@@ -2717,19 +2960,22 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts", method: "POST") {
+            @rest(type: "Post", path: "/posts", method: "post") {
             id
             title
           }
         }
       `;
 
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: { title: post.title } },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: { title: post.title } },
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(response.data.publishedPost).toEqual({
@@ -2756,19 +3002,22 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts", method: "POST") {
+            @rest(type: "Post", path: "/posts", method: "post") {
             title
           }
         }
       `;
 
       try {
-        await toPromise<Result>(
-          execute(link, {
-            operationName: 'publishPost',
-            query: createPostMutation,
-            variables: { input: { title: null } },
-          }),
+        await firstValueFrom<Result>(
+          execute(
+            link,
+            {
+              query: createPostMutation,
+              variables: { input: { title: null } },
+            },
+            { client: dummyClient },
+          ),
         );
       } catch (e) {
         expect(e).toEqual(
@@ -2797,18 +3046,21 @@ describe('Mutation', () => {
 
       mutation publishPost($input: PublishablePostInput!) {
         publishedPost(input: $input)
-          @rest(type: "Post", path: "/posts", method: "POST") {
+          @rest(type: "Post", path: "/posts", method: "post") {
           id
           title
         }
       }
     `;
-    return await toPromise<Result>(
-      execute(link, {
-        operationName: 'publishPost',
-        query: createPostMutation,
-        variables: { input: { title: post.title } },
-      }),
+    return await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        },
+        { client: dummyClient },
+      ),
     ).catch(e =>
       expect(e).toEqual(
         new Error('Response not successful: Received status code 500'),
@@ -2818,7 +3070,7 @@ describe('Mutation', () => {
 
   describe('fieldNameDenormalizer', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it('corrects names to snake_case for link-level denormalizer', async () => {
       expect.assertions(3);
@@ -2844,29 +3096,34 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/new", method: "POST") {
+            @rest(type: "Post", path: "/posts/new", method: "post") {
             id
             titleString
             categoryId
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: camelPost },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: camelPost },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
 
-      expect(requestCall[1]).toEqual(
+      expect(requestCall.options).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          method: 'post',
         }),
       );
-      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+      expect(JSON.parse(String(requestCall.options.body || ''))).toMatchObject(
+        intermediatePost,
+      );
 
       expect(response.data.publishedPost).toEqual(
         expect.objectContaining(resultPost),
@@ -2898,7 +3155,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/new"
-              method: "POST"
+              method: "post"
               fieldNameDenormalizer: $requestLevelDenormalizer
             ) {
             id
@@ -2907,22 +3164,30 @@ describe('Mutation', () => {
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: camelPost, requestLevelDenormalizer: snake_case },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: {
+              input: camelPost,
+              requestLevelDenormalizer: snake_case,
+            },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
 
-      expect(requestCall[1]).toEqual(
+      expect(requestCall.options).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          method: 'post',
         }),
       );
-      expect(JSON.parse(requestCall[1].body)).toMatchObject(intermediatePost);
+      expect(JSON.parse(String(requestCall.options.body || ''))).toMatchObject(
+        intermediatePost,
+      );
 
       expect(response.data.publishedPost).toEqual(
         expect.objectContaining(resultPost),
@@ -2931,7 +3196,7 @@ describe('Mutation', () => {
   });
   describe('bodyKey/bodyBuilder', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
     it("if using the regular JSON bodyBuilder it doesn't stack multiple content-type headers", async () => {
       const CUSTOM_JSON_CONTENT_TYPE = 'my-custom-json-ish-content-type';
@@ -2963,7 +3228,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "post") {
             id
             title
             items
@@ -2971,15 +3236,20 @@ describe('Mutation', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post },
+          },
+          { client: dummyClient },
+        ),
       );
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1].headers.get('content-type')).toEqual(
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect((requestCall.options.headers as any)['content-type']).toEqual(
         CUSTOM_JSON_CONTENT_TYPE,
       );
     });
@@ -3015,7 +3285,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "post") {
             id
             title
             items
@@ -3023,20 +3293,25 @@ describe('Mutation', () => {
         }
       `;
 
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post },
+          },
+          { client: dummyClient },
+        ),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(JSON.stringify(post));
+      expect(requestCall.options.body).toEqual(JSON.stringify(post));
     });
 
     it('respects bodyKey for mutations', async () => {
@@ -3061,7 +3336,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/new"
-              method: "POST"
+              method: "post"
               bodyKey: "someApiWithACustomBodyKey"
             ) {
             id
@@ -3069,18 +3344,21 @@ describe('Mutation', () => {
           }
         }
       `;
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { someApiWithACustomBodyKey: { title: post.title } },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { someApiWithACustomBodyKey: { title: post.title } },
+          },
+          { client: dummyClient },
+        ),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
     });
     it('respects bodyBuilder for mutations', async () => {
@@ -3106,7 +3384,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/new"
-              method: "POST"
+              method: "post"
               bodyBuilder: $customBuilder
             ) {
             id
@@ -3118,22 +3396,25 @@ describe('Mutation', () => {
         return 'MAGIC_PREFIX' + JSON.stringify(args.input);
       }
 
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: {
-            input: { title: post.title },
-            customBuilder: fakeEncryption,
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: {
+              input: { title: post.title },
+              customBuilder: fakeEncryption,
+            },
           },
-        }),
+          { client: dummyClient },
+        ),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/posts/new')[0];
-      expect(requestCall[1]).toEqual(
+      const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
+      expect(requestCall.options).toEqual(
         expect.objectContaining({
-          method: 'POST',
+          method: 'post',
           body: JSON.stringify(
             fakeEncryption({
               args: { input: { title: post.title } },
@@ -3156,28 +3437,33 @@ describe('Mutation', () => {
       const getPostQuery = gql`
         query getPost($id: ID!) {
           post(input: { id: $id })
-            @rest(type: "Post", path: "/post-to-get-post", method: "POST") {
+            @rest(type: "Post", path: "/post-to-get-post", method: "post") {
             id
             title
           }
         }
       `;
 
-      const response = await toPromise<Result>(
-        execute(link, {
-          operationName: 'getPost',
-          query: getPostQuery,
-          variables: { id: '1' },
-        }),
+      const response = await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: getPostQuery,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
 
       expect(response.data.post).toEqual(resultPost);
 
-      const requestCall = fetchMock.calls('/api/post-to-get-post')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/post-to-get-post',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(JSON.stringify({ id: '1' }));
+      expect(requestCall.options.body).toEqual(JSON.stringify({ id: '1' }));
     });
     it('throws when no body input is provided for HTTP methods other than GET or DELETE', async () => {
       expect.assertions(1);
@@ -3186,23 +3472,24 @@ describe('Mutation', () => {
 
       const createPostMutation = gql`
         mutation createPost {
-          sendPost @rest(type: "Post", path: "/posts/new", method: "POST") {
+          sendPost @rest(type: "Post", path: "/posts/new", method: "post") {
             id
             title
           }
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'createPost',
-          query: createPostMutation,
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+          },
+          { client: dummyClient },
+        ),
       ).catch(e =>
-        expect(e).toEqual(
-          new Error(
-            '[GraphQL POST mutation using a REST call without a body]. No `input` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.',
-          ),
+        expect(e).toMatchInlineSnapshot(
+          `[Error: [GraphQL post mutation using a REST call without a body]. No \`input\` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.]`,
         ),
       );
     });
@@ -3212,7 +3499,7 @@ describe('Mutation', () => {
 
   describe('bodySerializer', () => {
     afterEach(() => {
-      fetchMock.restore();
+      fetchMock.mockRestore();
     });
 
     it('defaults to json serialization for objects', async () => {
@@ -3244,7 +3531,7 @@ describe('Mutation', () => {
 
         mutation publishPost($input: PublishablePostInput!) {
           publishedPost(input: $input)
-            @rest(type: "Post", path: "/posts/newComplexPost", method: "POST") {
+            @rest(type: "Post", path: "/posts/newComplexPost", method: "post") {
             id
             title
             items
@@ -3252,19 +3539,24 @@ describe('Mutation', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(JSON.stringify(post));
+      expect(requestCall.options.body).toEqual(JSON.stringify(post));
     });
 
     it('respects custom body serializers keys', async () => {
@@ -3313,7 +3605,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: "const"
             ) {
             id
@@ -3323,20 +3615,25 @@ describe('Mutation', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(42);
-      expect({ headers: flattenHeaders(requestCall[1]) }).toEqual(
+      expect(requestCall.options.body).toEqual(42);
+      expect({ headers: flattenHeaders(requestCall.options) }).toEqual(
         expect.objectContaining({
           headers: expect.objectContaining({
             'content-type': 'text/plain',
@@ -3391,7 +3688,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: $bodySerializer
             ) {
             id
@@ -3402,7 +3699,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: "fake"
             ) {
             id
@@ -3412,25 +3709,31 @@ describe('Mutation', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post, bodySerializer: constSerializer },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post, bodySerializer: constSerializer },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(42);
-
-      const secondRequestCall = fetchMock.calls('/api/posts/newComplexPost')[1];
-      expect(secondRequestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      expect(requestCall.options.body).toEqual(42);
+      const secondRequestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[1];
+      expect(secondRequestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(secondRequestCall[1].body).toEqual(
+      expect(secondRequestCall.options.body).toEqual(
         expect.objectContaining({ isFake: true }),
       );
     });
@@ -3500,7 +3803,7 @@ describe('Mutation', () => {
             @rest(
               type: "Post"
               path: "/posts/newComplexPost"
-              method: "POST"
+              method: "post"
               bodySerializer: "upFiles"
             ) {
             id
@@ -3512,22 +3815,27 @@ describe('Mutation', () => {
         }
       `;
 
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post },
+          },
+          { client: dummyClient },
+        ),
       );
 
-      const requestCall = fetchMock.calls('/api/posts/newComplexPost')[0];
-      expect(requestCall[1]).toEqual(
-        expect.objectContaining({ method: 'POST' }),
+      const requestCall = fetchMock.callHistory.calls(
+        '/api/posts/newComplexPost',
+      )[0];
+      expect(requestCall.options).toEqual(
+        expect.objectContaining({ method: 'post' }),
       );
-      expect(requestCall[1].body).toEqual(
+      expect(requestCall.options.body).toEqual(
         expect.objectContaining({ cover: file }),
       );
-      expect(requestCall[1].body).toEqual(
+      expect(requestCall.options.body).toEqual(
         expect.objectContaining({ attachments: mockFileList }),
       );
     });
@@ -3543,7 +3851,7 @@ describe('Mutation', () => {
           createPost(input: $input)
             @rest(
               type: "Post"
-              method: "POST"
+              method: "post"
               path: "/posts/createPost"
               bodySerializer: "missing"
             ) {
@@ -3554,12 +3862,15 @@ describe('Mutation', () => {
 
       const post = { id: '1' };
 
-      return toPromise<Result>(
-        execute(link, {
-          operationName: 'publishPost',
-          query: createPostMutation,
-          variables: { input: post },
-        }),
+      return firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: createPostMutation,
+            variables: { input: post },
+          },
+          { client: dummyClient },
+        ),
       ).catch(e =>
         expect(e).toEqual(
           new Error(
@@ -3576,23 +3887,33 @@ describe('validateRequestMethodForOperationType', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType('GIBBERISH', 'mutation'),
-      ).toThrowError('"mutation" operations do not support that HTTP-verb');
+        validateRequestMethodForOperationType(
+          'GIBBERISH',
+          OperationTypeNode.MUTATION,
+        ),
+      ).toThrowErrorMatchingInlineSnapshot(
+        `""mutation" operations do not support that HTTP-verb"`,
+      );
     });
   });
   describe('for operation type "subscription"', () => {
     it('throws because it is not supported yet', () => {
       expect.assertions(1);
       expect(() =>
-        validateRequestMethodForOperationType('GET', 'subscription'),
-      ).toThrowError('A "subscription" operation is not supported yet.');
+        validateRequestMethodForOperationType(
+          'GET',
+          OperationTypeNode.SUBSCRIPTION,
+        ),
+      ).toThrowErrorMatchingInlineSnapshot(
+        `"A "subscription" operation is not supported yet."`,
+      );
     });
   });
 });
 
 describe('export directive', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
   it('should throw an error if export is missing', async () => {
     expect.assertions(1);
@@ -3615,12 +3936,15 @@ describe('export directive', () => {
     `;
 
     try {
-      await toPromise<Result>(
-        execute(link, {
-          operationName: 'postTitle',
-          query: postTagWithoutExport,
-          variables: { id: '1' },
-        }),
+      await firstValueFrom<Result>(
+        execute(
+          link,
+          {
+            query: postTagWithoutExport,
+            variables: { id: '1' },
+          },
+          { client: dummyClient },
+        ),
       );
     } catch (e) {
       expect(e.message).toBe(
@@ -3653,12 +3977,15 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTagExport,
-        variables: { id: '1' },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTagExport,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
@@ -3692,12 +4019,15 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postTitle',
-        query: postTagExport,
-        variables: { id: '1' },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTagExport,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
@@ -3771,11 +4101,14 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'userPostsWithTagDetails',
-        query: userPostsWithTagDetails,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: userPostsWithTagDetails,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.user.posts[0].tags[0].details.message).toEqual(
@@ -3816,12 +4149,15 @@ describe('export directive', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'getPostWithCommentsAndDetails',
-        query: getPostWithCommentsAndDetails,
-        variables: { id: '1' },
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: getPostWithCommentsAndDetails,
+          variables: { id: '1' },
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.comments[0].details[0]).toEqual({
@@ -3833,7 +4169,7 @@ describe('export directive', () => {
 
 describe('Apollo client integration', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   it('can integrate with apollo client', async () => {
@@ -3858,7 +4194,7 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data }: ApolloQueryResult<any> = await client.query({
+    const { data }: ApolloLink.Result<any> = await client.query({
       query: postTagExport,
     });
 
@@ -3891,10 +4227,10 @@ describe('Apollo client integration', () => {
       query: postTagExport,
     });
 
-    expect(fetchMock.lastCall()[1].body).toBeUndefined();
+    expect(fetchMock.callHistory.lastCall()!.options.body).toBeUndefined();
   });
 
-  it('treats absent response fields as optional', async done => {
+  it('treats absent response fields as optional', async () => {
     // Discovered in: https://github.com/apollographql/apollo-link-rest/issues/74
 
     const link = new RestLink({ uri: '/api' });
@@ -3923,11 +4259,14 @@ describe('Apollo client integration', () => {
       }
     `;
 
-    const { data } = await toPromise<Result>(
-      execute(link, {
-        operationName: 'postWithContent',
-        query: postTitleQuery,
-      }),
+    const { data } = await firstValueFrom<Result>(
+      execute(
+        link,
+        {
+          query: postTitleQuery,
+        },
+        { client: dummyClient },
+      ),
     );
 
     expect(data.post.unfairCriticism).toBeNull();
@@ -3937,17 +4276,14 @@ describe('Apollo client integration', () => {
       link,
     });
 
-    const { data: data2 }: ApolloQueryResult<any> = await client.query({
+    const { data: data2 }: ApolloLink.Result<any> = await client.query({
       query: postTitleQuery,
     });
     expect(data2.post.unfairCriticism).toBeNull();
 
-    const errorLink = onError(opts => {
+    const errorLink = new ErrorLink(opts => {
       console.error(opts);
-      const { networkError, graphQLErrors } = opts;
-      expect(
-        networkError || (graphQLErrors && graphQLErrors.length > 0),
-      ).toBeTruthy();
+      expect(opts.error).toBeTruthy();
     });
     const combinedLink = ApolloLink.from([
       new RestLink({
@@ -3979,27 +4315,24 @@ describe('Apollo client integration', () => {
       const result = await client3.query({
         query: postTitleQuery,
       });
-      const { errors } = result;
-      if (errors && errors.length > 0) {
+      if (result.error) {
         throw new Error('All is well, errors were thrown as expected');
       }
-      done.fail('query should throw some sort of error');
-    } catch (error) {
-      done();
-    }
+      throw new Error('query should throw some sort of error');
+    } catch (error) {}
   });
 
-  it('can catch HTTP Status errors', async done => {
+  it('can catch HTTP Status errors', async () => {
     const link = new RestLink({ uri: '/api' });
 
     const status = 403;
 
     // setup onError link
-    const errorLink = onError(opts => {
-      const { networkError } = opts;
-      if (networkError != null) {
+    const errorLink = new ErrorLink(opts => {
+      const { error } = opts;
+      if (ServerError.is(error)) {
         //console.debug(`[Network error]: ${networkError}`);
-        const { statusCode } = networkError as RestLink.ServerError;
+        const { statusCode } = error;
         expect(statusCode).toEqual(status);
       }
     });
@@ -4010,7 +4343,7 @@ describe('Apollo client integration', () => {
       link: combinedLink,
     });
 
-    fetchMock.mock('/api/post/1', {
+    fetchMock.mockGlobal().get('/api/post/1', {
       status,
       body: { id: 1 },
     });
@@ -4019,10 +4352,8 @@ describe('Apollo client integration', () => {
       await client.query({
         query: sampleQuery,
       });
-      done.fail('query should throw a network error');
-    } catch (error) {
-      done();
-    }
+      throw new Error('query should throw a network error');
+    } catch (error) {}
   });
 
   it('supports being cancelled and does not throw', done => {
@@ -4042,7 +4373,11 @@ describe('Apollo client integration', () => {
       customFetch: customFetch as any,
     });
 
-    const sub = execute(link, { query: sampleQuery }).subscribe({
+    const sub = execute(
+      link,
+      { query: sampleQuery },
+      { client: dummyClient },
+    ).subscribe({
       next: () => {
         done.fail('result should not have been called');
       },
@@ -4063,7 +4398,7 @@ describe('Apollo client integration', () => {
 
 describe('Playing nice with others', () => {
   afterEach(() => {
-    fetchMock.restore();
+    fetchMock.mockRestore();
   });
 
   function buildLinks() {
@@ -4087,7 +4422,7 @@ describe('Playing nice with others', () => {
     fetchMock.get('/api/posts', posts);
     fetchMock.post('/graphql', authors);
     const { restLink, httpLink } = buildLinks();
-    const link = from([restLink, httpLink]);
+    const link = ApolloLink.from([restLink, httpLink]);
     const restQuery = gql`
       query {
         people @rest(type: "[Post]", path: "/posts") {
@@ -4112,14 +4447,14 @@ describe('Playing nice with others', () => {
         }
       }
     `;
-    const { data: restData } = await toPromise<Result>(
-      execute(link, { operationName: 'restQuery', query: restQuery }),
+    const { data: restData } = await firstValueFrom<Result>(
+      execute(link, { query: restQuery }, { client: dummyClient }),
     );
-    const { data: httpData } = await toPromise<Result>(
-      execute(link, { operationName: 'httpData', query: httpQuery }),
+    const { data: httpData } = await firstValueFrom<Result>(
+      execute(link, { query: httpQuery }, { client: dummyClient }),
     );
-    const { data: combinedData } = await toPromise<Result>(
-      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    const { data: combinedData } = await firstValueFrom<Result>(
+      execute(link, { query: combinedQuery }, { client: dummyClient }),
     );
     expect(restData).toEqual({
       people: [
@@ -4144,7 +4479,7 @@ describe('Playing nice with others', () => {
     fetchMock.post('/graphql', authors);
 
     const { restLink, httpLink } = buildLinks();
-    const link = from([restLink, httpLink]);
+    const link = ApolloLink.from([restLink, httpLink]);
 
     const combinedQuery = gql`
       query {
@@ -4157,8 +4492,8 @@ describe('Playing nice with others', () => {
       }
     `;
 
-    const { data: combinedData } = await toPromise<Result>(
-      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    const { data: combinedData } = await firstValueFrom<Result>(
+      execute(link, { query: combinedQuery }, { client: dummyClient }),
     );
 
     expect(combinedData).toEqual({
@@ -4183,7 +4518,7 @@ describe('Playing nice with others', () => {
     fetchMock.get('/api/posts', posts);
     fetchMock.post('/graphql', authorErrors);
     const { restLink, httpLink } = buildLinks();
-    const link = from([restLink, httpLink]);
+    const link = ApolloLink.from([restLink, httpLink]);
 
     const combinedQuery = gql`
       query {
@@ -4196,8 +4531,8 @@ describe('Playing nice with others', () => {
       }
     `;
 
-    const { data: combinedData, errors } = await toPromise<Result>(
-      execute(link, { operationName: 'combinedQuery', query: combinedQuery }),
+    const { data: combinedData, errors } = await firstValueFrom<Result>(
+      execute(link, { query: combinedQuery }, { client: dummyClient }),
     );
 
     expect(combinedData).toEqual({
