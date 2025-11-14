@@ -7,8 +7,7 @@ import {
   OperationTypeNode,
   SelectionSetNode,
 } from 'graphql';
-import { Observable } from '@apollo/client/core';
-import { ApolloLink } from '@apollo/client';
+import { ApolloLink, Observable } from '@apollo/client';
 import {
   checkDocument,
   createFragmentMap,
@@ -1309,9 +1308,15 @@ export class RestLink extends ApolloLink {
 
   public request(
     operation: ApolloLink.Operation,
-    forward?: ApolloLink.ForwardFunction,
+    forward: ApolloLink.ForwardFunction,
   ): Observable<ApolloLink.Result> {
-    const { query, variables, getContext, setContext } = operation;
+    const {
+      query,
+      variables,
+      getContext,
+      setContext,
+      operationType,
+    } = operation;
     const context: LinkChainContext | any = getContext() as any;
     const isRestQuery = hasDirectives(['rest'], query);
     if (!isRestQuery) {
@@ -1351,9 +1356,6 @@ export class RestLink extends ApolloLink {
     const mainDefinition = getMainDefinition(query);
     const fragmentDefinitions = getFragmentDefinitions(query);
 
-    const operationType: OperationTypeNode =
-      (mainDefinition || ({} as any)).operation || 'query';
-
     const requestContext: RequestContext = {
       headers,
       endpoints: this.endpoints,
@@ -1373,7 +1375,7 @@ export class RestLink extends ApolloLink {
     };
     const resolverOptions = {};
     let obs: Observable<ApolloLink.Result>;
-    if (nonRest && forward) {
+    if (nonRest) {
       operation.query = nonRest;
       obs = forward(operation);
     } else obs = of({ data: {} });
@@ -1400,7 +1402,10 @@ export class RestLink extends ApolloLink {
                 observer.complete();
               })
               .catch(err => {
-                if (err.name === 'AbortError') return;
+                if (err.name === 'AbortError') {
+                  observer.complete();
+                  return;
+                }
                 if (err.result && err.result.errors) {
                   observer.next(err.result);
                 }
