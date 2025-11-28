@@ -60,7 +60,7 @@
     "bundlesize": "0.17.x",
     "camelcase": "5.0.x",
     "codecov": "3.x",
-    "danger": "6.x",
+    "danger": "13.x",
     "fetch-mock": "7.x",
     "graphql": "14.x",
     "isomorphic-fetch": "2.2.x",
