@@ -19,7 +19,7 @@ import {
   removeDirectivesFromDocument,
   resultKeyNameFromField,
 } from '@apollo/client/utilities/internal';
-import { graphql, isInlineFragment } from './utils/graphql';
+import { graphql, isInlineFragment } from './utils/graphql.js';
 import * as qs from 'qs';
 import { addTypenameToDocument } from '@apollo/client/utilities';
 import { mergeMap, of } from 'rxjs';

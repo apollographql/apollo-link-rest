@@ -43,6 +43,10 @@ node -e "var package = require('./package.json'); \
   package['jsnext:main'] = 'index.js'; \
   package['react-native'] = 'index.js'; \
   package.typings = 'index.d.ts'; \
+  package.exports['.'].module = './index.js'; \
+  package.exports['.']['module-sync'] = './index.js'; \
+  package.exports['.'].require = './bundle.umd.js'; \
+  package.exports['.'].default = './index.js'; \
   var origVersion = 'local';
   var fs = require('fs'); \
   fs.writeFileSync('./npm/package.json', JSON.stringify(package, null, 2)); \
