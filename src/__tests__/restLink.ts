@@ -2,7 +2,7 @@ import {
   ApolloClient,
   ApolloLink,
   disableFragmentWarnings,
-  execute,
+  execute as executeLink,
   gql,
   HttpLink,
   InMemoryCache,
@@ -21,6 +21,23 @@ import {
 import { firstValueFrom, map } from 'rxjs';
 import { OperationTypeNode } from 'graphql/language';
 import { ErrorLink } from '@apollo/client/link/error';
+
+function createDefaultExecuteContext() {
+  return {
+    client: new ApolloClient({
+      cache: new InMemoryCache(),
+      link: ApolloLink.empty(),
+    }),
+  };
+}
+
+function execute(
+  link: ApolloLink,
+  request: ApolloLink.Request,
+  context: ApolloLink.ExecuteContext = createDefaultExecuteContext(),
+) {
+  return executeLink(link, request, context);
+}
 
 // the official apis have an extra argument that would conflict (via typescript)
 function camelCase(str: string): string {
@@ -115,11 +132,6 @@ const sampleQuery = gql`
 
 type Result = { [index: string]: any };
 
-const dummyClient = new ApolloClient({
-  link: ApolloLink.empty(),
-  cache: new InMemoryCache(),
-});
-
 describe('Configuration', () => {
   describe('Errors', () => {
     afterEach(() => {
@@ -164,15 +176,7 @@ describe('Configuration', () => {
       `;
 
       try {
-        await firstValueFrom<Result>(
-          execute(
-            link,
-            {
-              query: postTitleQuery,
-            },
-            { client: dummyClient },
-          ),
-        );
+        await firstValueFrom<Result>(execute(link, { query: postTitleQuery }));
       } catch (error) {
         expect(error.message).toBe(
           'One of ("path" | "pathBuilder") must be set in the @rest() directive. This request had neither, please add one',
@@ -264,13 +268,7 @@ describe('Configuration', () => {
       `;
 
       const { data } = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postAndTags,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postAndTags }),
       );
 
       expect(data.post.title).toBeDefined();
@@ -303,13 +301,7 @@ describe('Configuration', () => {
       `;
 
       const { data } = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postAndTags,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postAndTags }),
       );
 
       expect(data.post.__typename).toBeDefined();
@@ -340,13 +332,7 @@ describe('Configuration', () => {
       `;
 
       const { data } = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postAndTags,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postAndTags }),
       );
 
       expect(data.post.data).toBeDefined();
@@ -387,16 +373,10 @@ describe('Configuration', () => {
       `;
 
       const { data } = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postQuery,
-            variables: {
-              perRequestNormalizer: snake_case,
-            },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: postQuery,
+          variables: { perRequestNormalizer: snake_case },
+        }),
       );
 
       expect(data.post).toEqual({
@@ -433,13 +413,7 @@ describe('Configuration', () => {
       `;
 
       const { data } = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitle,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitle }),
       );
 
       expect(data.post.title).toBe('custom');
@@ -670,13 +644,7 @@ describe('Complex responses need nested __typename insertions', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: someQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: someQuery }),
     );
 
     expect(data).toMatchObject({
@@ -768,13 +736,7 @@ describe('Complex responses need nested __typename insertions', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: someQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: someQuery }),
     );
 
     expect(data).toMatchObject({
@@ -1009,13 +971,7 @@ describe('Complex responses need nested __typename insertions', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: someQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: someQuery }),
     );
 
     expect(data).toMatchObject({
@@ -1058,7 +1014,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
         }
       `;
       const { data: restData } = await firstValueFrom<Result>(
-        execute(link, { query: restQuery }, { client: dummyClient }),
+        execute(link, { query: restQuery }),
       );
       expect(restData).toEqual({
         post: {
@@ -1091,7 +1047,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
         }
       `;
       const { data: restData } = await firstValueFrom<Result>(
-        execute(link, { query: restQuery }, { client: dummyClient }),
+        execute(link, { query: restQuery }),
       );
       expect(restData).toEqual({
         posts: [
@@ -1134,7 +1090,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
         }
       `;
       const { data: restData } = await firstValueFrom<Result>(
-        execute(link, { query: restQuery }, { client: dummyClient }),
+        execute(link, { query: restQuery }),
       );
       expect(restData).toEqual({
         post: {
@@ -1174,7 +1130,7 @@ describe('Can customize/parse the response before passing to Apollo', () => {
         }
       `;
       const { data: restData } = await firstValueFrom<Result>(
-        execute(link, { query: restQuery }, { client: dummyClient }),
+        execute(link, { query: restQuery }),
       );
       expect(restData).toEqual({
         posts: [
@@ -1208,13 +1164,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery }),
     );
 
     expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
@@ -1233,13 +1183,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: serverConfigQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: serverConfigQuery }),
     );
 
     expect(data).toMatchObject({ config: stringResp });
@@ -1258,13 +1202,7 @@ describe('Query single call', () => {
       }
     `;
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: adminsQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: adminsQuery }),
     );
 
     expect(data).toMatchObject({ admins: arrayResp });
@@ -1287,13 +1225,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery }),
     );
 
     expect(data).toMatchObject({ post });
@@ -1330,13 +1262,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: tagsQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: tagsQuery }),
     );
 
     const tagsWithTypeName = tags.map(tag => ({
@@ -1374,13 +1300,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery }),
     );
 
     expect(data.post.content).toBeUndefined();
@@ -1403,13 +1323,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery }),
     );
 
     expect(data).toMatchObject({ post: { ...post, __typename: 'Post' } });
@@ -1433,14 +1347,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery, variables: { id: '1' } }),
     );
 
     expect(data.post.title).toBe(post.title);
@@ -1465,14 +1372,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: feedQuery,
-          variables: { offset: 0 },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: feedQuery, variables: { offset: 0 } }),
     );
 
     expect(data.post.title).toBe(post.title);
@@ -1497,14 +1397,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: feedQuery,
-          variables: { published: false },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: feedQuery, variables: { published: false } }),
     );
 
     expect(data.post.title).toBe(post.title);
@@ -1528,14 +1421,10 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: peopleWithoutAddressQuery,
-          variables: { address: null },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: peopleWithoutAddressQuery,
+        variables: { address: null },
+      }),
     );
 
     expect(data.people.name).toBe(person.name);
@@ -1569,24 +1458,10 @@ describe('Query single call', () => {
     `;
 
     const { data: data1 } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery1,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery1, variables: { id: '1' } }),
     );
     const { data: data2 } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery2,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery2, variables: { id: '1' } }),
     );
 
     expect(data1.post.title).toBe(postV1.title);
@@ -1628,13 +1503,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery }),
     );
 
     expect(data).toMatchObject({
@@ -1662,13 +1531,7 @@ describe('Query single call', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: queryWithNoContent,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: queryWithNoContent }),
     );
 
     expect(data).toMatchObject({
@@ -1700,13 +1563,7 @@ describe('Query single call', () => {
 
     try {
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: errorWithNoContent,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: errorWithNoContent }),
       );
     } catch (e) {
       expect(e).toEqual(
@@ -1768,17 +1625,10 @@ describe('Use a custom pathBuilder', () => {
     }
 
     const { data: data1 } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-          variables: {
-            status: 'published',
-            pathFunction: createPostsPath,
-          },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: postTitleQuery,
+        variables: { status: 'published', pathFunction: createPostsPath },
+      }),
     );
 
     expect(data1).toMatchObject({
@@ -1787,17 +1637,10 @@ describe('Use a custom pathBuilder', () => {
 
     // Extra tests below to disprove: https://github.com/apollographql/apollo-link-rest/issues/102
     const { data: data2 } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-          variables: {
-            otherStatus: 'published',
-            pathFunction: createPostsPath,
-          },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: postTitleQuery,
+        variables: { otherStatus: 'published', pathFunction: createPostsPath },
+      }),
     );
 
     expect(data2).toMatchObject({
@@ -1875,14 +1718,10 @@ describe('Use a custom pathBuilder', () => {
     `;
 
     await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: nonEncodedQuery,
-          variables: { name: 'Love apollo' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: nonEncodedQuery,
+        variables: { name: 'Love apollo' },
+      }),
     );
 
     expect(
@@ -1892,14 +1731,10 @@ describe('Use a custom pathBuilder', () => {
     ).toBe(true);
 
     await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: encodedQuery,
-          variables: { name: 'Love apollo' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: encodedQuery,
+        variables: { name: 'Love apollo' },
+      }),
     );
 
     expect(
@@ -1909,14 +1744,10 @@ describe('Use a custom pathBuilder', () => {
     ).toBe(true);
 
     await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: mixedQuery,
-          variables: { id: 1, query: { comments: 5 } },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: mixedQuery,
+        variables: { id: 1, query: { comments: 5 } },
+      }),
     );
 
     expect(
@@ -1957,13 +1788,7 @@ describe('Query multiple calls', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postAndTags,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postAndTags }),
     );
 
     expect(data.post).toBeDefined();
@@ -1995,13 +1820,7 @@ describe('Query multiple calls', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postAndTags,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postAndTags }),
     );
 
     expect(data.post).toBeDefined();
@@ -2034,13 +1853,7 @@ describe('Query multiple calls', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postAndTags,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postAndTags }),
     );
 
     expect(data.tags).toBeDefined();
@@ -2079,14 +1892,7 @@ describe('GraphQL aliases should work', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQueries,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQueries, variables: { id: '1' } }),
     );
 
     expect(data.v1.title).toBe(postV1.title);
@@ -2111,14 +1917,7 @@ describe('GraphQL aliases should work', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQueries,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQueries, variables: { id: '1' } }),
     );
 
     expect(data.post.title).toBe(postV1.titleText);
@@ -2143,15 +1942,7 @@ describe('Query options', () => {
       const post = { id: '1', Title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: sampleQuery,
-          },
-          { client: dummyClient },
-        ),
-      );
+      await firstValueFrom<Result>(execute(link, { query: sampleQuery }));
 
       const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
@@ -2181,15 +1972,7 @@ describe('Query options', () => {
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: sampleQuery,
-          },
-          { client: dummyClient },
-        ),
-      );
+      await firstValueFrom<Result>(execute(link, { query: sampleQuery }));
 
       const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
@@ -2222,15 +2005,7 @@ describe('Query options', () => {
       const post = { id: '1', title: 'Love apollo' };
       fetchMock.get('/api/post/1', post);
 
-      await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: sampleQuery,
-          },
-          { client: dummyClient },
-        ),
-      );
+      await firstValueFrom<Result>(execute(link, { query: sampleQuery }));
 
       const credentials = fetchMock.callHistory.lastCall()!.options.credentials;
       expect(credentials).toBe('my-credentials');
@@ -2285,14 +2060,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postAndTags,
-            context,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postAndTags, context }),
       );
     });
   });
@@ -2315,14 +2083,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls(
@@ -2351,14 +2112,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2386,9 +2140,7 @@ describe('Query options', () => {
       };
 
       const link1 = new RestLink({ uri: '/api' });
-      await firstValueFrom<Result>(
-        execute(link1, operation, { client: dummyClient }),
-      );
+      await firstValueFrom<Result>(execute(link1, operation));
 
       const link2 = new RestLink({
         uri: '/api',
@@ -2396,9 +2148,7 @@ describe('Query options', () => {
           Accept: 'text/plain',
         },
       });
-      await firstValueFrom<Result>(
-        execute(link2, operation, { client: dummyClient }),
-      );
+      await firstValueFrom<Result>(execute(link2, operation));
 
       const requestCalls = fetchMock.callHistory.calls('/api/posts');
       expect(
@@ -2441,14 +2191,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2476,14 +2219,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2537,14 +2273,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2605,14 +2334,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2662,14 +2384,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2709,14 +2424,7 @@ describe('Query options', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTitleQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTitleQuery, variables: { id: '1' } }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/post/1')[0];
@@ -2756,14 +2464,10 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: { title: post.title } },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
@@ -2797,14 +2501,10 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: replacePostMutation,
-            variables: { id: post.id, input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: replacePostMutation,
+          variables: { id: post.id, input: post },
+        }),
       );
       expect(response.data.replacedPost).toEqual(resultPost);
 
@@ -2840,14 +2540,10 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: editPostMutation,
-            variables: { id: post.id, input: { categoryId: post.categoryId } },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: editPostMutation,
+          variables: { id: post.id, input: { categoryId: post.categoryId } },
+        }),
       );
       expect(response.data.editedPost).toEqual(resultPost);
 
@@ -2874,14 +2570,10 @@ describe('Mutation', () => {
         }
       `;
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: replacePostMutation,
-            variables: { id: post.id },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: replacePostMutation,
+          variables: { id: post.id },
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/posts/1')[0];
@@ -2923,14 +2615,10 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: { title: post.title } },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
       );
 
       expect(response.data.publishedPost).toEqual({
@@ -2968,14 +2656,10 @@ describe('Mutation', () => {
       `;
 
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: { title: post.title } },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: { title: post.title } },
+        }),
       );
 
       expect(response.data.publishedPost).toEqual({
@@ -3010,14 +2694,10 @@ describe('Mutation', () => {
 
       try {
         await firstValueFrom<Result>(
-          execute(
-            link,
-            {
-              query: createPostMutation,
-              variables: { input: { title: null } },
-            },
-            { client: dummyClient },
-          ),
+          execute(link, {
+            query: createPostMutation,
+            variables: { input: { title: null } },
+          }),
         );
       } catch (e) {
         expect(e).toEqual(
@@ -3053,14 +2733,10 @@ describe('Mutation', () => {
       }
     `;
     return await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: createPostMutation,
-          variables: { input: { title: post.title } },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: createPostMutation,
+        variables: { input: { title: post.title } },
+      }),
     ).catch(e =>
       expect(e).toEqual(
         new Error('Response not successful: Received status code 500'),
@@ -3104,14 +2780,10 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: camelPost },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: camelPost },
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
@@ -3165,17 +2837,13 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: {
-              input: camelPost,
-              requestLevelDenormalizer: snake_case,
-            },
+        execute(link, {
+          query: createPostMutation,
+          variables: {
+            input: camelPost,
+            requestLevelDenormalizer: snake_case,
           },
-          { client: dummyClient },
-        ),
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls('/api/posts/new')[0];
@@ -3237,14 +2905,10 @@ describe('Mutation', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post },
+        }),
       );
       const requestCall = fetchMock.callHistory.calls(
         '/api/posts/newComplexPost',
@@ -3294,14 +2958,10 @@ describe('Mutation', () => {
       `;
 
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post },
+        }),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
@@ -3345,14 +3005,10 @@ describe('Mutation', () => {
         }
       `;
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { someApiWithACustomBodyKey: { title: post.title } },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { someApiWithACustomBodyKey: { title: post.title } },
+        }),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
@@ -3397,17 +3053,13 @@ describe('Mutation', () => {
       }
 
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: {
-              input: { title: post.title },
-              customBuilder: fakeEncryption,
-            },
+        execute(link, {
+          query: createPostMutation,
+          variables: {
+            input: { title: post.title },
+            customBuilder: fakeEncryption,
           },
-          { client: dummyClient },
-        ),
+        }),
       );
       expect(response.data.publishedPost).toEqual(resultPost);
 
@@ -3445,14 +3097,7 @@ describe('Mutation', () => {
       `;
 
       const response = await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: getPostQuery,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: getPostQuery, variables: { id: '1' } }),
       );
 
       expect(response.data.post).toEqual(resultPost);
@@ -3480,13 +3125,7 @@ describe('Mutation', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: createPostMutation }),
       ).catch(e =>
         expect(e).toMatchInlineSnapshot(
           `[Error: [GraphQL post mutation using a REST call without a body]. No \`input\` was detected. Pass bodyKey, or bodyBuilder to the @rest() directive to resolve this.]`,
@@ -3540,14 +3179,10 @@ describe('Mutation', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post },
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls(
@@ -3616,14 +3251,10 @@ describe('Mutation', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post },
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls(
@@ -3710,14 +3341,10 @@ describe('Mutation', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post, bodySerializer: constSerializer },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post, bodySerializer: constSerializer },
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls(
@@ -3816,14 +3443,10 @@ describe('Mutation', () => {
       `;
 
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post },
+        }),
       );
 
       const requestCall = fetchMock.callHistory.calls(
@@ -3863,14 +3486,10 @@ describe('Mutation', () => {
       const post = { id: '1' };
 
       return firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: createPostMutation,
-            variables: { input: post },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, {
+          query: createPostMutation,
+          variables: { input: post },
+        }),
       ).catch(e =>
         expect(e).toEqual(
           new Error(
@@ -3937,14 +3556,7 @@ describe('export directive', () => {
 
     try {
       await firstValueFrom<Result>(
-        execute(
-          link,
-          {
-            query: postTagWithoutExport,
-            variables: { id: '1' },
-          },
-          { client: dummyClient },
-        ),
+        execute(link, { query: postTagWithoutExport, variables: { id: '1' } }),
       );
     } catch (e) {
       expect(e.message).toBe(
@@ -3978,14 +3590,7 @@ describe('export directive', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTagExport,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTagExport, variables: { id: '1' } }),
     );
 
     expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
@@ -4020,14 +3625,7 @@ describe('export directive', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTagExport,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTagExport, variables: { id: '1' } }),
     );
 
     expect(data.post.tag).toEqual({ ...tag, __typename: 'Tag' });
@@ -4102,13 +3700,7 @@ describe('export directive', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: userPostsWithTagDetails,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: userPostsWithTagDetails }),
     );
 
     expect(data.user.posts[0].tags[0].details.message).toEqual(
@@ -4150,14 +3742,10 @@ describe('export directive', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: getPostWithCommentsAndDetails,
-          variables: { id: '1' },
-        },
-        { client: dummyClient },
-      ),
+      execute(link, {
+        query: getPostWithCommentsAndDetails,
+        variables: { id: '1' },
+      }),
     );
 
     expect(data.post.comments[0].details[0]).toEqual({
@@ -4260,13 +3848,7 @@ describe('Apollo client integration', () => {
     `;
 
     const { data } = await firstValueFrom<Result>(
-      execute(
-        link,
-        {
-          query: postTitleQuery,
-        },
-        { client: dummyClient },
-      ),
+      execute(link, { query: postTitleQuery }),
     );
 
     expect(data.post.unfairCriticism).toBeNull();
@@ -4373,11 +3955,7 @@ describe('Apollo client integration', () => {
       customFetch: customFetch as any,
     });
 
-    const sub = execute(
-      link,
-      { query: sampleQuery },
-      { client: dummyClient },
-    ).subscribe({
+    const sub = execute(link, { query: sampleQuery }).subscribe({
       next: () => {
         done.fail('result should not have been called');
       },
@@ -4448,13 +4026,13 @@ describe('Playing nice with others', () => {
       }
     `;
     const { data: restData } = await firstValueFrom<Result>(
-      execute(link, { query: restQuery }, { client: dummyClient }),
+      execute(link, { query: restQuery }),
     );
     const { data: httpData } = await firstValueFrom<Result>(
-      execute(link, { query: httpQuery }, { client: dummyClient }),
+      execute(link, { query: httpQuery }),
     );
     const { data: combinedData } = await firstValueFrom<Result>(
-      execute(link, { query: combinedQuery }, { client: dummyClient }),
+      execute(link, { query: combinedQuery }),
     );
     expect(restData).toEqual({
       people: [
@@ -4493,7 +4071,7 @@ describe('Playing nice with others', () => {
     `;
 
     const { data: combinedData } = await firstValueFrom<Result>(
-      execute(link, { query: combinedQuery }, { client: dummyClient }),
+      execute(link, { query: combinedQuery }),
     );
 
     expect(combinedData).toEqual({
@@ -4532,7 +4110,7 @@ describe('Playing nice with others', () => {
     `;
 
     const { data: combinedData, errors } = await firstValueFrom<Result>(
-      execute(link, { query: combinedQuery }, { client: dummyClient }),
+      execute(link, { query: combinedQuery }),
     );
 
     expect(combinedData).toEqual({
