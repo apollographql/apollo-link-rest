@@ -28,7 +28,7 @@ import {
   shouldInclude,
 } from '@apollo/client/utilities/internal';
 
-import { DirectiveInfo, ExecInfo, Resolver } from '../restLink';
+import { DirectiveInfo, ExecInfo, Resolver } from '../restLink.js';
 
 function getDirectiveInfoFromField(
   field: FieldNode,

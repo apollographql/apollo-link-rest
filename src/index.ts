@@ -1,1 +1,1 @@
-export { RestLink, PathBuilder } from './restLink';
+export { RestLink, PathBuilder } from './restLink.js';
