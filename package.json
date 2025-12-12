@@ -84,6 +84,14 @@
   "disabledDependencies": {
     "bundlesize": "0.18.x"
   },
+  "exports": {
+    ".": {
+      "module": "./lib/index.js",
+      "module-sync": "./lib/index.js",
+      "require": "./lib/bundle.umd.js",
+      "default": "./lib/index.js"
+    }
+  },
   "bundlesize": [
     {
       "name": "apollo-link-rest",
