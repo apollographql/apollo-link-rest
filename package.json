@@ -51,7 +51,7 @@
   "devDependencies": {
     "@apollo/client": "^3.0.0-beta.29",
     "@apollo/link-error": "^2.0.0-beta.3",
-    "@babel/core": "7.x",
+    "@babel/core": "8.x",
     "@types/graphql": "14.x",
     "@types/jest": "23.x",
     "@types/node": "10.x",
