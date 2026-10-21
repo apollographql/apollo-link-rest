@@ -62,7 +62,7 @@
     "codecov": "3.x",
     "danger": "6.x",
     "fetch-mock": "7.x",
-    "graphql": "14.x",
+    "graphql": "14.7.0",
     "isomorphic-fetch": "2.2.x",
     "jest": "23.x",
     "jest-fetch-mock": "2.x",
